@@ -1,0 +1,3 @@
+[submodule "mobile_src"]
+	path = mobile_src
+	url = https://github.com/VincentApr/Echo_social.git
