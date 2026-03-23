@@ -1,0 +1,228 @@
+.sidebar {
+    display: flex;
+    flex-direction: row;
+    height: calc(100% - 24px);
+    z-index: 100;
+    position: relative;
+    margin: 12px 0 12px 12px;
+}
+
+/* ── Unified green container (rail + panel together) ── */
+.sidebar__green-body {
+    display: flex;
+    flex-direction: row;
+    background: var(--emerald-bg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: 22px;
+    box-shadow:
+        0 8px 32px rgba(67, 180, 146, 0.25),
+        0 2px 8px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    height: 100%;
+    transition: width var(--transition-smooth);
+}
+
+/* ── Icon Rail (always visible) ── */
+.sidebar__rail {
+    width: var(--sidebar-icon-width);
+    min-width: var(--sidebar-icon-width);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 4px;
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.sidebar__logo {
+    width: 38px;
+    height: 38px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    flex-shrink: 0;
+}
+
+.sidebar__logo-text {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.sidebar__nav-items {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+}
+
+.sidebar__nav-btn {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.65);
+    transition: all var(--transition-fast);
+    background: transparent;
+}
+
+.sidebar__nav-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.sidebar__nav-btn--active {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.sidebar__nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Tooltip */
+.sidebar__tooltip {
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(30, 30, 30, 0.9);
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Panel inside the green body ── */
+.sidebar__panel {
+    width: 0;
+    overflow: hidden;
+    transition: width var(--transition-smooth);
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    opacity: 0;
+}
+
+.sidebar__panel--open {
+    opacity: 1;
+}
+
+.sidebar__panel-content {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px 14px;
+    /* Override text colors for content inside green */
+    color: rgba(255, 255, 255, 0.95);
+}
+
+/* Panel content overrides for white-on-green */
+.sidebar__panel-content h3,
+.sidebar__panel-content .conversations-panel__title {
+    color: rgba(255, 255, 255, 0.95);
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+}
+
+.sidebar__panel-content .conversations-panel__square {
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+}
+
+.sidebar__panel-content .conversations-panel__square:hover {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar__panel-content .conversations-panel__avatar {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+}
+
+.sidebar__panel-content .conversations-panel__name {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.sidebar__panel-content .conversations-panel__badge {
+    background: rgba(255, 255, 255, 0.9);
+    color: rgba(10, 145, 104, 1);
+}
+
+.sidebar__panel-content .placeholder-page__title {
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.sidebar__panel-content .placeholder-page__desc {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Scrollbar inside green panel */
+.sidebar__panel-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar__panel-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
+}
+
+/* ── User section at bottom of rail ── */
+.sidebar__user-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sidebar__user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.sidebar__user-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.sidebar__logout-btn {
+    width: 36px !important;
+    height: 36px !important;
+    opacity: 0.6;
+    margin-bottom: 4px;
+}
+
+.sidebar__logout-btn:hover {
+    opacity: 1;
+    color: #ffcccc !important;
+}

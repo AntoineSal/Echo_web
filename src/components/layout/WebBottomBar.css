@@ -1,0 +1,85 @@
+.web-bottom-bar {
+    width: 100%;
+    height: var(--bottom-bar-height);
+    background: #fff;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: var(--shadow-bottom);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 20px;
+    flex-shrink: 0;
+    z-index: 200;
+}
+
+.web-bottom-bar__inner {
+    width: 100%;
+    max-width: 800px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.web-bottom-bar__target {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--echo-green);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.web-bottom-bar__input-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: rgba(245, 245, 245, 0.8);
+    border-radius: 24px;
+    padding: 4px 4px 4px 16px;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.web-bottom-bar__input-wrap:focus-within {
+    border-color: rgba(10, 145, 104, 0.3);
+    box-shadow: 0 0 0 3px rgba(10, 145, 104, 0.06);
+}
+
+.web-bottom-bar__input {
+    flex: 1;
+    background: none;
+    font-size: 14px;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+.web-bottom-bar__input::placeholder {
+    color: var(--text-muted);
+}
+
+.web-bottom-bar__send {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(200, 200, 200, 0.8);
+    background: rgba(200, 200, 200, 0.2);
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.web-bottom-bar__send--active {
+    background: var(--echo-green);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(10, 145, 104, 0.3);
+}
+
+.web-bottom-bar__send--active:hover {
+    background: rgba(10, 145, 104, 0.9);
+    transform: scale(1.05);
+}

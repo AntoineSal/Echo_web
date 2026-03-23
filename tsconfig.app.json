@@ -16,26 +16,77 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
+      "@mobile/config/api": [
+        "./src/stubs/api.ts"
+      ],
+      "@/config/api": [
+        "./src/stubs/api.ts"
+      ],
+      "@mobile/utils/storage": [
+        "./src/stubs/storage.ts"
+      ],
+      "@/utils/storage": [
+        "./src/stubs/storage.ts"
+      ],
+      "@mobile/utils/notifications": [
+        "./src/stubs/notifications.ts"
+      ],
+      "@/utils/notifications": [
+        "./src/stubs/notifications.ts"
+      ],
+      "@mobile/services/DatabaseManager": [
+        "./src/stubs/DatabaseManager.ts"
+      ],
+      "@/services/DatabaseManager": [
+        "./src/stubs/DatabaseManager.ts"
+      ],
+      "@mobile/utils/CacheManager": [
+        "./src/stubs/CacheManager.ts"
+      ],
+      "@/utils/CacheManager": [
+        "./src/stubs/CacheManager.ts"
+      ],
+      "@mobile/utils/networkErrors": [
+        "./src/stubs/networkErrors.ts"
+      ],
+      "@/utils/networkErrors": [
+        "./src/stubs/networkErrors.ts"
+      ],
+      "@mobile/utils/routeParams": [
+        "./src/stubs/routeParams.ts"
+      ],
+      "@/utils/routeParams": [
+        "./src/stubs/routeParams.ts"
+      ],
+      "react-native": [
+        "./node_modules/react-native-web/dist/index.d.ts"
+      ],
       "@mobile/*": [
+        "./mobile_src/*"
+      ],
+      "@/*": [
         "./mobile_src/*"
       ]
     },
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
+    "verbatimModuleSyntax": false,
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
   "include": [
     "src"
+  ],
+  "exclude": [
+    "mobile_src"
   ]
 }

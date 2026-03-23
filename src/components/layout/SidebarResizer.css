@@ -1,0 +1,29 @@
+.sidebar-resizer {
+    width: 6px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    z-index: 50;
+    position: relative;
+    transition: background var(--transition-fast);
+}
+
+.sidebar-resizer:hover {
+    background: rgba(10, 145, 104, 0.08);
+}
+
+.sidebar-resizer:hover .sidebar-resizer__handle {
+    opacity: 1;
+    background: var(--echo-green);
+}
+
+.sidebar-resizer__handle {
+    width: 3px;
+    height: 40px;
+    border-radius: 2px;
+    background: rgba(0, 0, 0, 0.1);
+    opacity: 0.5;
+    transition: all var(--transition-fast);
+}
