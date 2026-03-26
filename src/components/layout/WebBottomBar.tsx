@@ -3,30 +3,22 @@ import { IoSend, IoSparkles } from 'react-icons/io5';
 import { useJarvis } from '../../contexts/JarvisContext';
 import './WebBottomBar.css';
 
-import { useMessages } from '@mobile/hooks/useMessages';
-
 interface WebBottomBarProps {
     isChat: boolean;
-    conversationId?: string;
     conversationName?: string;
     onJarvisInvoke?: () => void;
 }
 
-export default function WebBottomBar({ isChat, conversationId, conversationName, onJarvisInvoke }: WebBottomBarProps) {
+export default function WebBottomBar({ isChat, conversationName, onJarvisInvoke }: WebBottomBarProps) {
     const [text, setText] = useState('');
     const { sendJarvisMessage } = useJarvis();
-
-    // Using the same hook as the conversation view will share the mutation and cache cleanly
-    const { sendMessage } = useMessages(conversationId || null);
 
     const handleSend = () => {
         if (!text.trim()) return;
 
-        if (isChat && conversationId) {
-            sendMessage.mutate({
-                conversationId,
-                content: text.trim(),
-            });
+        if (isChat) {
+            console.log(`[Chat] ${text}`);
+            // TODO: wire to conversation send logic
         } else {
             sendJarvisMessage(text);
             if (onJarvisInvoke) onJarvisInvoke();

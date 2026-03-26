@@ -4,10 +4,11 @@ import './ConversationsPanel.css';
 
 interface ConversationsPanelProps {
     filter: 'private' | 'groups' | 'agents';
-    onSelectConversation?: (uuid: string) => void;
+    onSelect: (conversation: Conversation) => void;
+    selectedId?: string;
 }
 
-export default function ConversationsPanel({ filter, onSelectConversation }: ConversationsPanelProps) {
+export default function ConversationsPanel({ filter, onSelect, selectedId }: ConversationsPanelProps) {
     const { isLoggedIn } = useAuth();
     const { privateConversations, groupConversations, agentConversations, isLoading } = useConversations();
 
@@ -51,10 +52,10 @@ export default function ConversationsPanel({ filter, onSelectConversation }: Con
             ) : (
                 <div className="conversations-panel__grid">
                     {conversations.map((conv) => (
-                        <button
-                            key={conv.uuid}
-                            className="conversations-panel__square"
-                            onClick={() => onSelectConversation?.(conv.uuid)}
+                        <button 
+                            key={conv.uuid} 
+                            className={`conversations-panel__square ${selectedId === conv.uuid ? 'selected' : ''}`}
+                            onClick={() => onSelect(conv)}
                         >
                             <div className="conversations-panel__avatar">
                                 {conv.avatar_url ? (

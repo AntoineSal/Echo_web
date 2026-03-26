@@ -39,6 +39,11 @@
     box-shadow: 0 4px 16px rgba(10, 145, 104, 0.18);
 }
 
+.conversations-panel__square.selected {
+    box-shadow: 0 0 0 2px var(--echo-green);
+    background: rgba(10, 145, 104, 0.05);
+}
+
 .conversations-panel__avatar {
     width: 44px;
     height: 44px;

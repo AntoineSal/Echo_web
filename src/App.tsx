@@ -6,9 +6,10 @@ import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import ProfilePage from './pages/ProfilePage'
 import PlaceholderPage from './pages/PlaceholderPage'
-import ConversationPage from './pages/ConversationPage'
+import ConversationsPage from './pages/ConversationsPage'
 import ConversationsPanel from './components/panels/ConversationsPanel'
 import './index.css'
+import { useState } from 'react'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,13 +17,11 @@ const queryClient = new QueryClient({
   },
 });
 
-import { useState } from 'react';
-
 function AppContent() {
   const { isLoggedIn, loading } = useAuth();
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [selectedConversation, setSelectedConversation] = useState<any | null>(null);
 
-  const renderPage = (activePage: PageId, navigate: (page: PageId) => void) => {
+  const renderPage = (activePage: PageId) => {
     if (loading) return null;
     if (!isLoggedIn) return <LoginPage />;
 
@@ -30,53 +29,35 @@ function AppContent() {
       case 'home':
         return <HomePage />;
       case 'conversations':
-        return <PlaceholderPage title="Conversations" description="Sélectionnez une conversation dans le panneau latéral pour commencer à discuter." />;
       case 'groups':
-        return <PlaceholderPage title="Groupes" description="Sélectionnez un groupe dans le panneau latéral." />;
       case 'agents':
-        return <PlaceholderPage title="Agents IA" description="Sélectionnez un agent dans le panneau latéral." />;
+        return <ConversationsPage selectedConversation={selectedConversation} />;
       case 'marketplace':
         return <PlaceholderPage title="Marketplace" description="Bientôt disponible — découvrez et installez des agents." />;
       case 'profile':
         return <ProfilePage />;
-      case 'conversation_view':
-        if (!selectedConversationId) return <HomePage />;
-        return (
-          <ConversationPage
-            conversationId={selectedConversationId}
-            onBack={() => {
-              setSelectedConversationId(null);
-              navigate('home');
-            }}
-          />
-        );
       default:
         return <HomePage />;
     }
   };
 
-  const renderPanelContent = (activePage: PageId, navigate: (page: PageId) => void) => {
+  const renderPanelContent = (activePage: PageId) => {
     if (!isLoggedIn) return null;
-
-    const handleSelect = (uuid: string) => {
-      setSelectedConversationId(uuid);
-      navigate('conversation_view');
-    };
 
     switch (activePage) {
       case 'conversations':
-        return <ConversationsPanel filter="private" onSelectConversation={handleSelect} />;
+        return <ConversationsPanel filter="private" onSelect={setSelectedConversation} selectedId={selectedConversation?.uuid} />;
       case 'groups':
-        return <ConversationsPanel filter="groups" onSelectConversation={handleSelect} />;
+        return <ConversationsPanel filter="groups" onSelect={setSelectedConversation} selectedId={selectedConversation?.uuid} />;
       case 'agents':
-        return <ConversationsPanel filter="agents" onSelectConversation={handleSelect} />;
+        return <ConversationsPanel filter="agents" onSelect={setSelectedConversation} selectedId={selectedConversation?.uuid} />;
       default:
         return null;
     }
   };
 
   return (
-    <AppLayout panelContent={renderPanelContent} selectedConversationId={selectedConversationId}>
+    <AppLayout panelContent={renderPanelContent}>
       {renderPage}
     </AppLayout>
   );

@@ -7,20 +7,20 @@ import { useAuth } from '../../contexts/AuthContext';
 import './AppLayout.css';
 
 interface AppLayoutProps {
-    children: (activePage: PageId, navigate: (page: PageId) => void) => React.ReactNode;
-    panelContent: (activePage: PageId, navigate: (page: PageId) => void) => React.ReactNode | null;
-    selectedConversationId?: string | null;
+    children: (activePage: PageId) => React.ReactNode;
+    panelContent: (activePage: PageId) => React.ReactNode | null;
 }
 
 const PAGES_WITH_PANEL: PageId[] = ['conversations', 'groups', 'agents'];
 
-export default function AppLayout({ children, panelContent, selectedConversationId }: AppLayoutProps) {
+export default function AppLayout({ children, panelContent }: AppLayoutProps) {
     const [currentNav, setCurrentNav] = useState<PageId>('home');
     const [mainPage, setMainPage] = useState<PageId>('home');
     const [panelWidth, setPanelWidth] = useState(SIDEBAR_PANEL_DEFAULT_WIDTH);
     const { user, isLoggedIn, logout } = useAuth();
 
     const isPanelOpen = PAGES_WITH_PANEL.includes(currentNav);
+    const currentPanelContent = panelContent(currentNav);
 
     const handleNavigate = useCallback((page: PageId) => {
         setCurrentNav(page);
@@ -28,8 +28,6 @@ export default function AppLayout({ children, panelContent, selectedConversation
             setMainPage(page);
         }
     }, []);
-
-    const currentPanelContent = panelContent(currentNav, handleNavigate);
 
     const handleResize = useCallback((newWidth: number) => {
         setPanelWidth(newWidth);
@@ -65,14 +63,13 @@ export default function AppLayout({ children, panelContent, selectedConversation
 
                 {/* Main content */}
                 <main className="app-layout__main">
-                    {children(mainPage, handleNavigate)}
+                    {children(mainPage)}
                 </main>
             </div>
 
             {/* Bottom bar */}
             <WebBottomBar
-                isChat={mainPage === 'conversation_view'}
-                conversationId={(mainPage === 'conversation_view' && selectedConversationId) || undefined}
+                isChat={false}
                 onJarvisInvoke={() => handleNavigate('home')}
             />
         </div>
