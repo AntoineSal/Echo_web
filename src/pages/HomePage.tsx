@@ -12,6 +12,7 @@ import { useJarvisSuggestions, type JarvisSuggestion } from '../hooks/useJarvisS
 import { useFriendRequests } from '../hooks/useFriendRequests';
 import { useGroupInvitations } from '../hooks/useGroupInvitations';
 import { useJarvis } from '../contexts/JarvisContext';
+import { useNavigation } from '../contexts/NavigationContext';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
 import './HomePage.css';
@@ -33,6 +34,15 @@ export default function HomePage() {
     const { groupInvitations, updateGroupInvitation } = useGroupInvitations();
     const jarvisSuggestions = useJarvisSuggestions(summaries);
     const { liveTurns, clearLiveTurns, removeLiveTurn } = useJarvis();
+    const { openConversation } = useNavigation();
+
+    const allConversations = [...privateConversations, ...groupConversations, ...agentConversations];
+
+    const handleOpenConversation = useCallback((conversationUuid: string | null) => {
+        if (!conversationUuid) return;
+        const conv = allConversations.find(c => c.uuid === conversationUuid);
+        if (conv) openConversation(conv);
+    }, [allConversations, openConversation]);
 
     const totalUnread = [...privateConversations, ...groupConversations, ...agentConversations]
         .reduce((sum, c) => sum + (c.unread_count || 0), 0);
@@ -281,10 +291,7 @@ export default function HomePage() {
                         )}
                         <button
                             className="home-page__summary-body"
-                            onClick={() => {
-                                // TODO: Navigate to conversation when chat is implemented
-                                console.log('Navigate to', item.conversationUuid);
-                            }}
+                            onClick={() => handleOpenConversation(item.conversationUuid ?? null)}
                             disabled={!item.conversationUuid}
                         >
                             <span className="home-page__summary-sender">{item.sender}</span>
@@ -307,8 +314,9 @@ export default function HomePage() {
                                     key={s.id}
                                     className="home-page__suggestion-chip"
                                     onClick={() => {
-                                        // TODO: Navigate to conversation when chat is implemented
-                                        console.log('Suggestion clicked:', s.action);
+                                        if (s.action.type === 'navigate_conversation' && s.action.conversationUuid) {
+                                            handleOpenConversation(s.action.conversationUuid);
+                                        }
                                     }}
                                 >
                                     <span

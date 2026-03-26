@@ -24,6 +24,14 @@ export default defineConfig({
       // ── Stubs: intercept mobile-only modules BEFORE catch-all ──
       // API config (uses relative URLs for proxy)
       { find: /^@(?:mobile)?\/config\/api$/, replacement: path.resolve(__dirname, './src/stubs/api.ts') },
+      // API client (fetchWithAuth + setLogoutCallback)
+      { find: /^@(?:mobile)?\/services\/apiClient$/, replacement: path.resolve(__dirname, './src/stubs/apiClient.ts') },
+      // Core API types (User, etc.)
+      { find: /^@(?:mobile)?\/types\/api$/, replacement: path.resolve(__dirname, './src/stubs/api-types.ts') },
+      // CGU constants
+      { find: /^@(?:mobile)?\/constants\/cgu$/, replacement: path.resolve(__dirname, './src/stubs/cgu-constants.ts') },
+      // CGU utils (localStorage-based)
+      { find: /^@(?:mobile)?\/utils\/cgu$/, replacement: path.resolve(__dirname, './src/stubs/cgu-utils.ts') },
       // Storage (removes expo-secure-store dependency)
       { find: /^@(?:mobile)?\/utils\/storage$/, replacement: path.resolve(__dirname, './src/stubs/storage.ts') },
       // Notifications (removes expo-notifications dependency)
