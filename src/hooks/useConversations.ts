@@ -1,6 +1,4 @@
-// Web useConversations hook — simplified from mobile (API-only, no SQLite)
-// Uses react-query + fetchWithAuth
-
+// Web useConversations hook — aligned with mobile API response fields
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,12 +12,49 @@ export interface Conversation {
     is_archived?: boolean;
     created_at?: string;
     updated_at?: string;
+    conversation_type: 'direct' | 'group' | 'agent' | 'group_chat' | 'ai_agent';
+
     last_message?: {
         content: string;
         created_at: string | null;
         sender_username: string;
     };
-    conversation_type: 'direct' | 'group' | 'agent';
+
+    // Direct conversation — API returns `other_participant`
+    other_participant?: {
+        username: string;
+        surnom?: string;
+        uuid?: string;
+        photo_profil_url?: string;
+        photo_profil?: string | null;
+        is_online?: boolean;
+    };
+
+    // Group conversation
+    group_info?: {
+        uuid?: string;
+        name: string;
+        avatar: string | null;
+        member_count?: number;
+    };
+
+    // Agent conversation
+    framework_agent?: {
+        name: string;
+        avatar_url: string;
+        uuid?: string;
+        agent_type?: string;
+        description?: string;
+    };
+
+    // Some API versions return agent data under agent_info
+    agent_info?: {
+        uuid?: string;
+        name?: string;
+        avatar_url?: string;
+    };
+
+    // Legacy / fallback fields from older API versions
     other_user?: {
         username: string;
         uuid: string;
@@ -30,25 +65,20 @@ export interface Conversation {
     group_photo?: string | null;
     group_photo_url?: string;
     members_count?: number;
-    framework_agent?: {
-        name: string;
-        avatar_url: string;
-        uuid?: string;
-        agent_type?: string;
-        description?: string;
-    };
-    // Computed display fields
+
+    // Computed display fields (filled by enrichConversation)
     name: string;
     avatar_url: string;
 }
 
 const MAX_PAGES = 20;
 
-function extractResultsAndNext(payload: Record<string, unknown>): { results: Conversation[]; next: string | null } {
-    if (Array.isArray(payload)) return { results: payload, next: null };
+function extractResultsAndNext(payload: unknown): { results: Conversation[]; next: string | null } {
+    if (Array.isArray(payload)) return { results: payload as Conversation[], next: null };
+    const p = payload as Record<string, unknown>;
     return {
-        results: (payload.results as Conversation[]) || [],
-        next: (payload.next as string) || null,
+        results: (p.results as Conversation[]) || [],
+        next: (p.next as string) || null,
     };
 }
 
@@ -70,23 +100,56 @@ async function fetchAllPages(endpoint: string): Promise<Conversation[]> {
     return all;
 }
 
+function normalizeConvType(conv: Conversation): 'direct' | 'group' | 'agent' {
+    const t = conv.conversation_type as string;
+    if (t === 'group_chat' || t === 'group') return 'group';
+    if (t === 'ai_agent' || t === 'agent') return 'agent';
+    return 'direct';
+}
+
 function computeDisplayName(conv: Conversation): string {
-    if (conv.conversation_type === 'group') return conv.group_name || 'Groupe';
-    if (conv.conversation_type === 'agent') return conv.framework_agent?.name || 'Agent';
-    return conv.other_user?.username || 'Utilisateur';
+    if (conv.conversation_type === 'group') {
+        return conv.group_info?.name || conv.group_name || 'Groupe';
+    }
+    if (conv.conversation_type === 'agent') {
+        return (
+            conv.framework_agent?.name ||
+            conv.agent_info?.name ||
+            (conv as any).ai_agent?.name ||
+            (conv as any).agent?.name ||
+            'Agent'
+        );
+    }
+    // Direct conversation — prefer other_participant (current API), fall back to other_user (legacy)
+    const p = conv.other_participant;
+    const u = conv.other_user;
+    return p?.surnom || p?.username || u?.username || 'Utilisateur';
 }
 
 function computeAvatarUrl(conv: Conversation): string {
-    if (conv.conversation_type === 'group') return conv.group_photo_url || '';
-    if (conv.conversation_type === 'agent') return conv.framework_agent?.avatar_url || '';
-    return conv.other_user?.photo_profil_url || conv.other_user?.photo_profil || '';
+    if (conv.conversation_type === 'group') {
+        return conv.group_info?.avatar || conv.group_photo_url || conv.group_photo || '';
+    }
+    if (conv.conversation_type === 'agent') {
+        return (
+            conv.framework_agent?.avatar_url ||
+            conv.agent_info?.avatar_url ||
+            (conv as any).ai_agent?.avatar_url ||
+            ''
+        );
+    }
+    const p = conv.other_participant;
+    const u = conv.other_user;
+    return p?.photo_profil_url || u?.photo_profil_url || u?.photo_profil || '';
 }
 
 function enrichConversation(conv: Conversation): Conversation {
+    const normalizedType = normalizeConvType(conv);
     return {
         ...conv,
-        name: computeDisplayName(conv),
-        avatar_url: computeAvatarUrl(conv),
+        conversation_type: normalizedType,
+        name: computeDisplayName({ ...conv, conversation_type: normalizedType }),
+        avatar_url: computeAvatarUrl({ ...conv, conversation_type: normalizedType }),
     };
 }
 
@@ -97,7 +160,7 @@ export function useConversations() {
     const privateQuery = useQuery({
         queryKey: ['conversations', 'private'],
         queryFn: async () => {
-            const convs = await fetchAllPages('/messaging/conversations/?type=private');
+            const convs = await fetchAllPages('/messaging/conversations/private/');
             return convs.map(enrichConversation);
         },
         enabled: isLoggedIn,
@@ -108,7 +171,7 @@ export function useConversations() {
     const groupQuery = useQuery({
         queryKey: ['conversations', 'groups'],
         queryFn: async () => {
-            const convs = await fetchAllPages('/messaging/conversations/?type=group');
+            const convs = await fetchAllPages('/messaging/conversations/groups/');
             return convs.map(enrichConversation);
         },
         enabled: isLoggedIn,
@@ -119,7 +182,7 @@ export function useConversations() {
     const agentQuery = useQuery({
         queryKey: ['conversations', 'agents'],
         queryFn: async () => {
-            const convs = await fetchAllPages('/messaging/conversations/?type=agent');
+            const convs = await fetchAllPages('/messaging/conversations/agents/');
             return convs.map(enrichConversation);
         },
         enabled: isLoggedIn,
@@ -140,6 +203,7 @@ export function useConversations() {
         groupConversations: groupQuery.data ?? [],
         agentConversations: agentQuery.data ?? [],
         isLoading: privateQuery.isLoading || groupQuery.isLoading || agentQuery.isLoading,
+        isRefetching: privateQuery.isRefetching || groupQuery.isRefetching || agentQuery.isRefetching,
         error: privateQuery.error || groupQuery.error || agentQuery.error,
         refreshAll,
     };

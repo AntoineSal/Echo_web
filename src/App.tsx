@@ -2,13 +2,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { JarvisProvider } from './contexts/JarvisContext'
 import { NavigationProvider } from './contexts/NavigationContext'
+import { WebSocketProvider } from './contexts/WebSocketContext'
 import AppLayout from './components/layout/AppLayout'
 import type { PageId } from './components/layout/Sidebar'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import ProfilePage from './pages/ProfilePage'
 import PlaceholderPage from './pages/PlaceholderPage'
+import MarketplacePage from './pages/MarketplacePage'
 import ConversationsPage from './pages/ConversationsPage'
+import AddFriendPage from './pages/AddFriendPage'
+import CreateGroupPage from './pages/CreateGroupPage'
+import AddAgentPage from './pages/AddAgentPage'
 import ConversationsPanel from './components/panels/ConversationsPanel'
 import './index.css'
 
@@ -32,8 +37,14 @@ function AppContent() {
       case 'groups':
       case 'agents':
         return <ConversationsPage />;
+      case 'add-friend':
+        return <AddFriendPage />;
+      case 'add-group':
+        return <CreateGroupPage />;
+      case 'add-agent':
+        return <AddAgentPage />;
       case 'marketplace':
-        return <PlaceholderPage title="Marketplace" description="Bientôt disponible — découvrez et installez des agents." />;
+        return <MarketplacePage />;
       case 'profile':
         return <ProfilePage />;
       default:
@@ -48,6 +59,9 @@ function AppContent() {
       conversations: 'private',
       groups: 'groups',
       agents: 'agents',
+      'add-friend': 'private',
+      'add-group': 'groups',
+      'add-agent': 'agents',
     };
     const filter = filterMap[activePage];
     if (!filter) return null;
@@ -66,9 +80,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <NavigationProvider>
-          <JarvisProvider>
-            <AppContent />
-          </JarvisProvider>
+          <WebSocketProvider>
+            <JarvisProvider>
+              <AppContent />
+            </JarvisProvider>
+          </WebSocketProvider>
         </NavigationProvider>
       </AuthProvider>
     </QueryClientProvider>

@@ -1,43 +1,307 @@
-import React, { useEffect, useRef } from 'react';
-import { useMessages } from '../../hooks/useMessages';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMessages, type Message } from '../../hooks/useMessages';
 import { useWebSocketMessages } from '../../hooks/useWebSocketMessages';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { MessageBubble } from './MessageBubble';
-import { ChatInput } from './ChatInput';
+import { AgentContentRenderer } from './AgentContentRenderer';
+import { buildMessageReactionContent, extractReactionMapFromMessages, isReactionEventMessage } from '../../utils/messageReactions';
+import { IoChevronBack, IoChevronDown, IoChevronUp, IoChatbubbleOutline, IoSend, IoSparkles } from 'react-icons/io5';
 import './ConversationThread.css';
 
 interface ConversationThreadProps {
     conversationId: string;
     conversationName: string;
     conversationAvatar?: string;
+    conversationType?: 'direct' | 'group' | 'agent' | 'group_chat' | 'ai_agent';
 }
 
-export function ConversationThread({ conversationId, conversationName, conversationAvatar }: ConversationThreadProps) {
+// ── Helper: is this message from an AI agent? ──────────────────────────────
+function isAgentMessage(msg: Message): boolean {
+    return (
+        !!msg.is_ai_generated ||
+        !!msg.framework_agent_name ||
+        !!msg.framework_agent_uuid ||
+        !!msg.agent_info?.name ||
+        !!msg.agent_info?.uuid ||
+        !!msg.ai_agent_name ||
+        !!msg.ai_agent_uuid
+    );
+}
+
+function resolveAgentName(msg: Message): string {
+    return (
+        msg.agent_info?.name ||
+        msg.framework_agent_name ||
+        msg.ai_agent_name ||
+        msg.sender_username ||
+        'Agent IA'
+    );
+}
+
+/** Extract first non-empty text line for collapsed preview */
+function getContentPreview(content: string): string {
+    if (!content?.trim()) return '';
+    try {
+        const parsed = JSON.parse(content);
+        if (parsed?.mode === 'structured' && parsed?.data?.nodes) {
+            for (const node of parsed.data.nodes) {
+                if (node.text?.trim()) return node.text.trim();
+            }
+        }
+        if (parsed?.fallback_text) return parsed.fallback_text;
+        if (parsed?.text) return parsed.text;
+    } catch { /* plain text */ }
+    const firstLine = content.split('\n').find(l => l.trim());
+    return firstLine?.trim() ?? '';
+}
+
+// ── Agent message card ─────────────────────────────────────────────────────
+interface AgentCardProps {
+    msg: Message;
+    threadMessages: Message[];
+    conversationId: string;
+    isAutoExpanded: boolean;
+    onThreadSend: (text: string, parentUuid: string) => void;
+    conversationAvatar?: string;
+}
+
+function AgentCard({ msg, threadMessages, conversationId, isAutoExpanded, onThreadSend, conversationAvatar }: AgentCardProps) {
+    const { user } = useAuth();
+    const [expanded, setExpanded] = useState(isAutoExpanded);
+    const [threadText, setThreadText] = useState('');
+    const threadInputRef = useRef<HTMLInputElement>(null);
+    const agentName = resolveAgentName(msg);
+    const preview = getContentPreview(msg.content ?? '');
+
+    const formattedTime = msg.created_at
+        ? new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        : '';
+
+    const handleThreadSend = () => {
+        if (!threadText.trim()) return;
+        onThreadSend(threadText.trim(), msg.uuid);
+        setThreadText('');
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleThreadSend();
+        }
+    };
+
+    return (
+        <div className={`agent-card ${expanded ? 'agent-card--expanded' : ''}`}>
+
+            {/* ── Header (always visible) ──────────────────────────────── */}
+            <button
+                type="button"
+                className="agent-card__header"
+                onClick={() => setExpanded(v => !v)}
+                aria-expanded={expanded}
+            >
+                <div className="agent-card__header-left">
+                    {/* Avatar */}
+                    {conversationAvatar ? (
+                        <img src={conversationAvatar} alt={agentName} className="agent-card__avatar" />
+                    ) : (
+                        <div className="agent-card__avatar-placeholder">
+                            <IoSparkles size={16} color="rgba(10,145,104,0.9)" />
+                        </div>
+                    )}
+
+                    {/* Name + preview */}
+                    <div className="agent-card__header-text">
+                        <span className="agent-card__name">{agentName}</span>
+                        {!expanded && preview && (
+                            <span className="agent-card__preview">{preview}</span>
+                        )}
+                    </div>
+                </div>
+
+                <div className="agent-card__header-right">
+                    {threadMessages.length > 0 && (
+                        <span className="agent-card__reply-count">
+                            <IoChatbubbleOutline size={12} />
+                            {threadMessages.length}
+                        </span>
+                    )}
+                    <span className="agent-card__time">{formattedTime}</span>
+                    <span className="agent-card__chevron">
+                        {expanded ? <IoChevronUp size={16} /> : <IoChevronDown size={16} />}
+                    </span>
+                </div>
+            </button>
+
+            {/* ── Expandable body ──────────────────────────────────────── */}
+            <div className="agent-card__body">
+
+                {/* Divider */}
+                <div className="agent-card__body-divider" />
+
+                {/* Agent response content */}
+                {msg.content ? (
+                    <div className="agent-card__content">
+                        <AgentContentRenderer content={msg.content} />
+                    </div>
+                ) : (
+                    <p className="agent-card__empty">Aucun contenu</p>
+                )}
+
+                {/* Thread replies */}
+                {threadMessages.length > 0 && (
+                    <div className="agent-card__thread">
+                        <div className="agent-card__thread-label">
+                            <IoChatbubbleOutline size={13} />
+                            <span>{threadMessages.length} réponse{threadMessages.length > 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="agent-card__thread-messages">
+                            {threadMessages.map((tmsg) => {
+                                const isAgentMsg = !!(tmsg.is_ai_generated || tmsg.framework_agent_uuid || tmsg.ai_agent_uuid);
+                                const isMe = !isAgentMsg && ((tmsg.sender_uuid && user?.uuid)
+                                    ? tmsg.sender_uuid === user.uuid
+                                    : tmsg.sender_username === user?.username);
+                                const tTime = tmsg.created_at
+                                    ? new Date(tmsg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                                    : '';
+                                return (
+                                    <div
+                                        key={tmsg.uuid}
+                                        className={`agent-card__thread-msg ${isAgentMsg ? 'agent-card__thread-msg--agent' : isMe ? 'agent-card__thread-msg--mine' : 'agent-card__thread-msg--theirs'}`}
+                                    >
+                                        {isAgentMsg && (
+                                            <span className="agent-card__thread-sender agent-card__thread-sender--agent">🤖 {tmsg.sender_username || 'Agent'}</span>
+                                        )}
+                                        {!isAgentMsg && !isMe && (
+                                            <span className="agent-card__thread-sender">{tmsg.sender_username}</span>
+                                        )}
+                                        <div className={`agent-card__thread-bubble ${isAgentMsg ? 'agent-card__thread-bubble--agent' : isMe ? 'agent-card__thread-bubble--mine' : 'agent-card__thread-bubble--theirs'}`}>
+                                            <span>{tmsg.content}</span>
+                                            <span className="agent-card__thread-time">{tTime}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* Thread input */}
+                <div className="agent-card__thread-input">
+                    <input
+                        ref={threadInputRef}
+                        type="text"
+                        className="agent-card__thread-input-field"
+                        placeholder="Répondre à l'agent…"
+                        value={threadText}
+                        onChange={e => setThreadText(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                    />
+                    <button
+                        type="button"
+                        className={`agent-card__thread-send ${threadText.trim() ? 'active' : ''}`}
+                        onClick={handleThreadSend}
+                        disabled={!threadText.trim()}
+                        aria-label="Envoyer"
+                    >
+                        <IoSend size={13} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Main ConversationThread ──────────────────────────────────────────────────
+export function ConversationThread({
+    conversationId,
+    conversationName,
+    conversationAvatar,
+    conversationType,
+}: ConversationThreadProps) {
+    const { user } = useAuth();
     const { messages, isLoading, sendMessage, markAsRead } = useMessages(conversationId);
     const { isConnected } = useWebSocketMessages(conversationId);
+    const { closeConversation, registerSendCallback, openConversationManagement } = useNavigation();
     const scrollEndRef = useRef<HTMLDivElement>(null);
 
-    // Auto mark as read and scroll to bottom on load
+    const sendMutateRef = useRef(sendMessage.mutate);
+    sendMutateRef.current = sendMessage.mutate;
+
+    const isGroupConversation = conversationType === 'group';
+    const isAgentConversation = conversationType === 'agent';
+
     useEffect(() => {
-        if (conversationId) {
-            markAsRead();
-        }
+        registerSendCallback({
+            sendText: (text, parentMessageUuid) => {
+                sendMutateRef.current({ conversationId, content: text, parentMessageUuid });
+            },
+            sendFiles: (text, files, parentMessageUuid) => {
+                sendMutateRef.current({ conversationId, content: text, files, parentMessageUuid });
+            },
+        });
+        return () => registerSendCallback(null);
+    }, [conversationId, registerSendCallback]);
+
+    useEffect(() => {
+        if (conversationId) markAsRead();
     }, [conversationId, markAsRead]);
 
-    // Scroll to bottom when messages change
     useEffect(() => {
         scrollEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }, [messages.length]);
 
-    const handleSend = (text: string) => {
-        sendMessage.mutate({ conversationId, content: text });
-        setTimeout(() => scrollEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    };
+    const handleThreadSend = useCallback((text: string, parentUuid: string) => {
+        sendMutateRef.current({ conversationId, content: text, parentMessageUuid: parentUuid });
+    }, [conversationId]);
+
+    const orderedMessages = useMemo(() => messages.slice().reverse(), [messages]);
+
+    const childrenByParent = useMemo(() => {
+        const map = new Map<string, Message[]>();
+        for (const msg of orderedMessages) {
+            if (!msg.parent_message_uuid) continue;
+            const list = map.get(msg.parent_message_uuid) || [];
+            list.push(msg);
+            map.set(msg.parent_message_uuid, list);
+        }
+        return map;
+    }, [orderedMessages]);
+
+    const agentReplyUuids = useMemo(() => {
+        const agentUuids = new Set(orderedMessages.filter(isAgentMessage).map(m => m.uuid));
+        const replyUuids = new Set<string>();
+        for (const msg of orderedMessages) {
+            if (msg.parent_message_uuid && agentUuids.has(msg.parent_message_uuid)) {
+                replyUuids.add(msg.uuid);
+            }
+        }
+        return replyUuids;
+    }, [orderedMessages]);
+
+    // Build reaction map and set of reaction event UUIDs
+    const { reactionByMessageUuid, reactionEventMessageUuids } = useMemo(
+        () => extractReactionMapFromMessages(orderedMessages),
+        [orderedMessages]
+    );
+
+    // Send a reaction
+    const handleReact = useCallback((targetMessageUuid: string, emoji: string) => {
+        const content = buildMessageReactionContent(targetMessageUuid, emoji);
+        sendMutateRef.current({ conversationId, content });
+    }, [conversationId]);
+
+    const showStatusDot = isConnected && (isAgentConversation || conversationType === 'direct');
 
     return (
         <div className="conversation-thread">
-            {/* Thread Header */}
+            {/* Floating pill header */}
             <div className="thread-header">
-                <div className="thread-header-info">
+                <button type="button" className="thread-back-btn" onClick={closeConversation} title="Retour">
+                    <IoChevronBack size={22} color="rgba(60,60,60,0.9)" />
+                </button>
+                <div className="thread-header-info" onClick={openConversationManagement} style={{ cursor: 'pointer' }}>
                     {conversationAvatar ? (
                         <img src={conversationAvatar} alt={conversationName} className="thread-header-avatar" />
                     ) : (
@@ -45,39 +309,72 @@ export function ConversationThread({ conversationId, conversationName, conversat
                             {conversationName.charAt(0).toUpperCase()}
                         </div>
                     )}
-                    <div className="thread-header-text">
-                        <h2 className="thread-header-name">{conversationName}</h2>
-                        <span className="thread-header-status">
-                            {isConnected ? 'En ligne' : 'Déconnecté'}
-                        </span>
-                    </div>
+                    <span className="thread-header-name" title={conversationName}>
+                        {conversationName}
+                    </span>
+                    {showStatusDot && <span className="thread-status-dot" />}
                 </div>
             </div>
 
-            {/* Messages Area */}
+            {/* Messages area */}
             <div className="thread-messages">
-                {isLoading && messages.length === 0 ? (
+                {isLoading && orderedMessages.length === 0 ? (
                     <div className="thread-loading">Chargement des messages...</div>
                 ) : (
-                    messages.slice().reverse().map((msg, index, arr) => {
-                        const prevMsg = arr[index - 1];
-                        const nextMsg = arr[index + 1];
-                        
-                        const isSameSenderAsPrev = prevMsg && prevMsg.sender_uuid === msg.sender_uuid;
-                        const isSameSenderAsNext = nextMsg && nextMsg.sender_uuid === msg.sender_uuid;
-                        
-                        // Just basic groups logic
-                        const isFirstInGroup = !isSameSenderAsPrev;
-                        const isLastInGroup = !isSameSenderAsNext;
+                    orderedMessages.map((msg, index, arr) => {
+                        if (agentReplyUuids.has(msg.uuid)) return null;
+
+                        // Skip reaction event messages (they're virtual, not displayed)
+                        if (isReactionEventMessage(msg.content)) return null;
+
+                        // Agent message → expandable card
+                        if (isAgentMessage(msg)) {
+                            const threadMessages = childrenByParent.get(msg.uuid) || [];
+                            return (
+                                <AgentCard
+                                    key={msg.uuid}
+                                    msg={msg}
+                                    threadMessages={threadMessages}
+                                    conversationId={conversationId}
+                                    isAutoExpanded={isAgentConversation}
+                                    onThreadSend={handleThreadSend}
+                                    conversationAvatar={conversationAvatar}
+                                />
+                            );
+                        }
+
+                        // System message
+                        if (msg.message_type === 'system') {
+                            return (
+                                <div key={msg.uuid} className="system-message-container">
+                                    <span className="system-message-text">{msg.content}</span>
+                                </div>
+                            );
+                        }
+
+                        // Normal message — grouping
+                        const prevMsg = arr[index - 1] ?? null;
+                        const nextMsg = arr[index + 1] ?? null;
+
+                        const prevNormal = prevMsg && !agentReplyUuids.has(prevMsg.uuid) && !isAgentMessage(prevMsg) ? prevMsg : null;
+                        const nextNormal = nextMsg && !agentReplyUuids.has(nextMsg.uuid) && !isAgentMessage(nextMsg) ? nextMsg : null;
+
+                        const sameSender = (a: Message | null, b: Message) =>
+                            !!a && ((a.sender_uuid && b.sender_uuid)
+                                ? a.sender_uuid === b.sender_uuid
+                                : a.sender_username === b.sender_username);
 
                         return (
                             <MessageBubble
                                 key={msg.uuid || msg.id}
                                 message={msg}
-                                isFirstInGroup={isFirstInGroup}
-                                isLastInGroup={isLastInGroup}
-                                isSameSenderAsNext={isSameSenderAsNext}
-                                isSameSenderAsPrev={isSameSenderAsPrev}
+                                isFirstInGroup={!sameSender(prevNormal, msg)}
+                                isLastInGroup={!sameSender(nextNormal, msg)}
+                                isSameSenderAsNext={sameSender(nextNormal, msg)}
+                                isSameSenderAsPrev={sameSender(prevNormal, msg)}
+                                isGroupConversation={isGroupConversation}
+                                reactionEmojis={reactionByMessageUuid[msg.uuid] || []}
+                                onReact={handleReact}
                             />
                         );
                     })
@@ -85,8 +382,7 @@ export function ConversationThread({ conversationId, conversationName, conversat
                 <div ref={scrollEndRef} />
             </div>
 
-            {/* Input Area */}
-            <ChatInput onSend={handleSend} />
+            <div style={{ height: 8 }} />
         </div>
     );
 }

@@ -1,0 +1,82 @@
+.acr-root {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 14px;
+    color: rgba(10, 60, 30, 0.9);
+}
+
+.acr-title  { font-size: 16px; font-weight: 700; margin: 6px 0 2px; color: #065f46; }
+.acr-subtitle { font-size: 15px; font-weight: 600; margin: 4px 0 2px; color: #065f46; }
+.acr-heading  { font-size: 14px; font-weight: 600; margin: 4px 0 2px; color: #065f46; }
+.acr-text     { margin: 0; line-height: 1.5; white-space: pre-wrap; }
+.acr-caption  { margin: 0; font-size: 12px; color: #6b7280; font-style: italic; }
+.acr-quote    { margin: 4px 0; padding: 6px 10px; border-left: 3px solid rgba(10,145,104,0.5); color: #374151; font-style: italic; }
+
+.acr-code {
+    background: rgba(0,0,0,0.06);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-family: monospace;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 4px 0;
+}
+
+.acr-list, .acr-checklist { padding-left: 18px; margin: 4px 0; }
+.acr-list li, .acr-checklist__item { margin: 2px 0; line-height: 1.4; }
+.acr-checklist { list-style: none; padding-left: 0; }
+.acr-checklist__item { display: flex; align-items: flex-start; gap: 6px; }
+.acr-checklist__box { color: rgba(10,145,104,0.7); }
+
+.acr-kv { display: flex; gap: 8px; align-items: baseline; }
+.acr-kv__key   { font-weight: 600; color: #065f46; font-size: 13px; flex-shrink: 0; }
+.acr-kv__value { color: #374151; font-size: 13px; }
+
+.acr-table-wrap { overflow-x: auto; margin: 4px 0; }
+.acr-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.acr-table th { background: rgba(10,145,104,0.12); padding: 5px 8px; text-align: left; font-weight: 600; color: #065f46; border-bottom: 1px solid rgba(10,145,104,0.2); }
+.acr-table td { padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+.acr-table tr:last-child td { border-bottom: none; }
+
+.acr-metric { text-align: center; padding: 6px 0; }
+.acr-metric__value { font-size: 26px; font-weight: 700; color: rgba(10,145,104,1); display: block; }
+.acr-metric__label { font-size: 12px; color: #6b7280; display: block; margin-top: 2px; }
+
+.acr-progress { margin: 4px 0; }
+.acr-progress__label { font-size: 12px; color: #374151; margin-bottom: 3px; display: block; }
+.acr-progress__track { background: rgba(0,0,0,0.08); border-radius: 4px; height: 6px; overflow: hidden; }
+.acr-progress__fill  { height: 100%; background: rgba(10,145,104,0.8); border-radius: 4px; }
+
+.acr-badge { display: inline-block; background: rgba(10,145,104,0.15); color: #065f46; border-radius: 10px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+.acr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.acr-chip  { background: rgba(10,145,104,0.1); color: #065f46; border-radius: 12px; padding: 3px 10px; font-size: 12px; }
+
+.acr-divider { border: none; border-top: 1px solid rgba(10,145,104,0.2); margin: 6px 0; }
+.acr-spacer  { height: 8px; }
+
+.acr-callout { padding: 8px 12px; border-radius: 10px; font-size: 13px; }
+.acr-callout--green { background: rgba(10,145,104,0.08); color: #065f46; border-left: 3px solid rgba(10,145,104,0.5); }
+.acr-callout--blue  { background: rgba(59,130,246,0.08); color: #1d4ed8; border-left: 3px solid rgba(59,130,246,0.4); }
+.acr-callout--red   { background: rgba(239,68,68,0.08);  color: #b91c1c; border-left: 3px solid rgba(239,68,68,0.4); }
+
+.acr-button-wrap { margin: 4px 0; }
+.acr-button {
+    background: rgba(10,145,104,0.12);
+    color: rgba(10,145,104,1);
+    border: 1px solid rgba(10,145,104,0.3);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: inherit;
+}
+.acr-button:hover { background: rgba(10,145,104,0.2); }
+.acr-revealed { margin-top: 4px; padding: 6px 10px; background: rgba(10,145,104,0.06); border-radius: 8px; font-size: 13px; }
+
+.acr-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+.acr-section { margin: 6px 0; }
+.acr-section__title { font-weight: 600; color: #065f46; font-size: 13px; margin-bottom: 4px; }

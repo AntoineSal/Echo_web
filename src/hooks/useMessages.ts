@@ -9,6 +9,37 @@ export interface Attachment {
     file_url: string;
     thumbnail_url?: string;
     original_filename?: string;
+    duration?: number;
+}
+
+export interface FormField {
+    id: string;
+    type: 'text' | 'number' | 'select' | 'textarea' | 'checkbox';
+    label: string;
+    placeholder?: string;
+    required: boolean;
+    options?: string[];
+    min?: number;
+    max?: number;
+}
+
+export interface FormFieldResponse {
+    value: string | number | boolean;
+    filled_by: { user_uuid: string; username: string };
+    filled_at: string;
+}
+
+export interface InteractiveMessageData {
+    is_interactive: boolean;
+    form_data?: {
+        fields: FormField[];
+        responses: Record<string, FormFieldResponse>;
+    };
+    can_submit?: boolean;
+    initiator_uuid?: string;
+    initiator_username?: string;
+    agent_uuid?: string;
+    hidden_meta?: { is_form_response: boolean; agent_uuid: string };
 }
 
 export interface Message {
@@ -21,22 +52,28 @@ export interface Message {
     created_at: string | number;
     is_read?: boolean;
     is_ai_generated?: boolean;
-    message_type?: string;
+    message_type?: 'user' | 'system' | 'ai_generated' | string;
     conversation_uuid?: string;
     attachments?: Attachment[];
-    
-    // For threads
     parent_message_uuid?: string | null;
-    
+    interactive_data?: InteractiveMessageData;
+    // Agent metadata
+    framework_agent_name?: string;
+    framework_agent_uuid?: string;
+    agent_info?: { name?: string; uuid?: string };
+    ai_agent_name?: string;
+    ai_agent_uuid?: string;
     // Optimistic flags
     isPending?: boolean;
     sendError?: boolean;
+    deliveredButNotRead?: boolean;
 }
 
 interface SendMessageParams {
     conversationId: string;
     content: string;
     parentMessageUuid?: string | null;
+    files?: File[];
 }
 
 interface MessagesPage {
@@ -50,17 +87,11 @@ export function useMessages(conversationId: string | null) {
 
     const fetchMessagesPage = async ({ pageParam = null as string | null }): Promise<MessagesPage> => {
         if (!conversationId) return { messages: [], nextPageUrl: null };
-        
         const url = pageParam || `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/?limit=50&ordering=-created_at`;
         const res = await fetchWithAuth(url);
-        
-        if (!res.ok) {
-            throw new Error('Failed to fetch messages');
-        }
-        
+        if (!res.ok) throw new Error('Failed to fetch messages');
         const data = await res.json();
         const results = Array.isArray(data) ? data : data.results || data.messages || [];
-        
         return {
             messages: results,
             nextPageUrl: data.next || null,
@@ -77,56 +108,63 @@ export function useMessages(conversationId: string | null) {
         refetchOnWindowFocus: true,
     });
 
-    // Send message via POST
     const sendMessageMutation = useMutation({
-        mutationFn: async ({ conversationId, content, parentMessageUuid }: SendMessageParams) => {
+        mutationFn: async ({ conversationId, content, parentMessageUuid, files }: SendMessageParams) => {
             const tempUuid = `temp-${Date.now()}`;
-            
+
             // Optimistic update
             queryClient.setQueryData(['messages', conversationId], (oldData: any) => {
                 if (!oldData) return oldData;
-                
                 const newMessage: Message = {
                     id: Date.now(),
                     uuid: tempUuid,
-                    sender_username: user?.username || 'You',
+                    sender_username: user?.username || 'Vous',
                     sender_uuid: user?.uuid,
-                    sender_avatar_url: user?.photo_profil_url,
                     content,
                     created_at: new Date().toISOString(),
                     isPending: true,
                     parent_message_uuid: parentMessageUuid,
                 };
-
                 const newPages = [...oldData.pages];
                 const firstPage = { ...newPages[0] };
                 firstPage.messages = [newMessage, ...firstPage.messages];
                 newPages[0] = firstPage;
-                
                 return { ...oldData, pages: newPages };
             });
 
-            // Make the actual call
-            // Notice: The backend endpoint might be /messaging/conversations/{id}/messages/ or we might need to send to WS.
-            // Let's assume there is a POST endpoint. If not, we'll fall back to WS in the component or update this.
-            const res = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    content,
-                    message: content, // Sometimes it's message, sometimes content
-                    parent_message_uuid: parentMessageUuid 
-                }),
-            });
+            let res: Response;
+
+            if (files && files.length > 0) {
+                // Send with attachments
+                const formData = new FormData();
+                if (content.trim()) formData.append('content', content);
+                if (parentMessageUuid) formData.append('parent_message_uuid', parentMessageUuid);
+                files.forEach((file) => formData.append('files', file));
+                res = await fetchWithAuth(
+                    `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create-with-attachments/`,
+                    { method: 'POST', body: formData }
+                );
+            } else {
+                res = await fetchWithAuth(
+                    `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create/`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content, parent_message_uuid: parentMessageUuid }),
+                    }
+                );
+            }
 
             if (!res.ok) {
-                // Remove optimistic message on error
+                // Mark optimistic message as failed
                 queryClient.setQueryData(['messages', conversationId], (oldData: any) => {
                     if (!oldData) return oldData;
-                    const newPages = [...oldData.pages];
-                    const firstPage = { ...newPages[0] };
-                    firstPage.messages = firstPage.messages.filter((m: Message) => m.uuid !== tempUuid);
-                    newPages[0] = firstPage;
+                    const newPages = oldData.pages.map((page: MessagesPage) => ({
+                        ...page,
+                        messages: page.messages.map((m: Message) =>
+                            m.uuid === tempUuid ? { ...m, isPending: false, sendError: true } : m
+                        ),
+                    }));
                     return { ...oldData, pages: newPages };
                 });
                 throw new Error('Failed to send message');
@@ -134,27 +172,25 @@ export function useMessages(conversationId: string | null) {
 
             return await res.json();
         },
-        onSuccess: (data, variables) => {
-            // Invalidate to get the real message UUID from server, or let WS handle it
-            // WS will broadcast message so it's usually fine
+        onSuccess: (_data, variables) => {
             queryClient.invalidateQueries({ queryKey: ['messages', variables.conversationId] });
-        }
+        },
     });
 
     const markAsReadMutation = useMutation({
         mutationFn: async () => {
             if (!conversationId) return;
-            const res = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/${conversationId}/seen/`, {
-                method: 'POST',
-            });
+            const res = await fetchWithAuth(
+                `${API_BASE_URL}/messaging/conversations/${conversationId}/mark-as-seen/`,
+                { method: 'POST' }
+            );
             if (res.ok) {
-                 queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                queryClient.invalidateQueries({ queryKey: ['conversations'] });
             }
-        }
+        },
     });
 
-    // Flatten pages into a single array
-    const allMessages = messagesQuery.data?.pages.flatMap(p => p.messages) || [];
+    const allMessages = messagesQuery.data?.pages.flatMap((p) => p.messages) || [];
 
     return {
         messages: allMessages,

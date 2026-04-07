@@ -10,7 +10,7 @@ import {
 } from 'react-icons/io5';
 import './Sidebar.css';
 
-export type PageId = 'home' | 'conversations' | 'groups' | 'agents' | 'marketplace' | 'profile';
+export type PageId = 'home' | 'conversations' | 'groups' | 'agents' | 'marketplace' | 'profile' | 'add-friend' | 'add-group' | 'add-agent';
 
 interface NavItem {
     id: PageId;

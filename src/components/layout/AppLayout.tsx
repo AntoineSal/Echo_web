@@ -12,7 +12,7 @@ interface AppLayoutProps {
   panelContent: (activePage: PageId) => React.ReactNode | null;
 }
 
-const PAGES_WITH_PANEL: PageId[] = ['conversations', 'groups', 'agents'];
+const PAGES_WITH_PANEL: PageId[] = ['conversations', 'groups', 'agents', 'add-friend', 'add-group', 'add-agent'];
 
 export default function AppLayout({ children, panelContent }: AppLayoutProps) {
   const [panelWidth, setPanelWidth] = useState(SIDEBAR_PANEL_DEFAULT_WIDTH);
@@ -56,10 +56,7 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
         </main>
       </div>
 
-      <WebBottomBar
-        isChat={false}
-        onJarvisInvoke={() => navigate('home')}
-      />
+      <WebBottomBar />
     </div>
   );
 }

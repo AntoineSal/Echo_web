@@ -1,10 +1,11 @@
 import { IoChatbubblesOutline } from 'react-icons/io5';
 import { ConversationThread } from '../components/conversations/ConversationThread';
+import ConversationManagementPage from './ConversationManagementPage';
 import { useNavigation } from '../contexts/NavigationContext';
 import './ConversationsPage.css';
 
 export default function ConversationsPage() {
-  const { selectedConversation } = useNavigation();
+  const { selectedConversation, conversationView } = useNavigation();
 
   if (!selectedConversation) {
     return (
@@ -18,12 +19,17 @@ export default function ConversationsPage() {
     );
   }
 
+  if (conversationView === 'management') {
+    return <ConversationManagementPage conversation={selectedConversation} />;
+  }
+
   return (
     <ConversationThread
       key={selectedConversation.uuid}
       conversationId={selectedConversation.uuid}
       conversationName={selectedConversation.name}
       conversationAvatar={selectedConversation.avatar_url}
+      conversationType={selectedConversation.conversation_type}
     />
   );
 }

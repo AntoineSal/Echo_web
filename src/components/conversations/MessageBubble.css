@@ -1,30 +1,28 @@
+/* ── Message wrapper ── */
 .message-wrapper {
     display: flex;
     flex-direction: column;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
     width: 100%;
 }
 
-.message-wrapper-mine {
-    align-items: flex-end;
-}
+.message-wrapper-mine  { align-items: flex-end; }
+.message-wrapper-theirs { align-items: flex-start; }
 
-.message-wrapper-theirs {
-    align-items: flex-start;
-}
-
+/* Sender name for group chats — above the first bubble of the group */
 .sender-name {
     font-size: 11px;
-    color: rgba(60, 60, 60, 0.7);
-    margin-bottom: 4px;
-    margin-left: 12px;
-    font-weight: 500;
+    color: #777;
+    margin-left: 10px;
+    margin-bottom: 2px;
+    font-weight: 600;
 }
 
+/* ── Row: [timestamp+status] [bubble] or [bubble] [timestamp] ── */
 .message-content-row {
     display: flex;
     flex-direction: row;
-    align-items: center;
+    align-items: flex-end;
     max-width: 80%;
 }
 
@@ -33,11 +31,13 @@
     flex-direction: row;
     align-items: center;
     gap: 4px;
-    margin-right: 8px;
+    margin-right: 6px;
+    flex-shrink: 0;
 }
 
 .timestamp-container-right {
-    margin-left: 8px;
+    margin-left: 6px;
+    flex-shrink: 0;
 }
 
 .external-timestamp {
@@ -45,93 +45,90 @@
     color: rgba(60, 60, 60, 0.55);
 }
 
-.status-icon {
-    font-size: 12px;
-}
-
-.status-icon.pending { color: #999; }
+.status-icon          { font-size: 12px; }
+.status-icon.pending  { color: #999; }
 .status-icon.delivered { color: #999; }
-.status-icon.read { color: #4CAF50; font-weight: bold; }
-.status-icon.error { color: #F44336; }
+.status-icon.read     { color: #4CAF50; font-weight: bold; }
+.status-icon.error    { color: #F44336; }
 
+/* ── Bubble base ── */
 .message-bubble {
-    padding: 10px 14px;
+    padding: 8px 14px;
     position: relative;
     word-break: break-word;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+/* My messages — matches mobile: ECHO_COLOR, opacity 0.7 */
 .my-message {
-    background-color: #0A9168;
-    align-self: flex-end;
+    background-color: rgba(10, 145, 104, 0.8);
+    /* fixed corners — only right side varies */
+    border-top-left-radius: 20px;
+    border-bottom-left-radius: 20px;
 }
 
+/* Their messages — matches mobile: rgba(230,230,230,0.7) */
 .their-message {
-    background-color: #FFFFFF;
-    align-self: flex-start;
+    background-color: rgba(230, 230, 230, 0.7);
+    /* fixed corners — only left side varies */
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
 }
 
-/* Same Sender Border Radius Adjustments (mimicking mobile) */
-.same-next-mine { border-top-right-radius: 4px; margin-top: 2px; }
-.not-same-next-mine { border-top-right-radius: 20px; margin-top: 8px; }
-.same-prev-mine { border-bottom-right-radius: 4px; margin-bottom: 2px; }
-.not-same-prev-mine { border-bottom-right-radius: 20px; margin-bottom: 8px; }
-.message-bubble.my-message { border-top-left-radius: 20px; border-bottom-left-radius: 20px; }
+/*
+ * Radius grouping — mirrors mobile logic exactly.
+ *
+ * In our non-inverted list (oldest first):
+ *   prev = message rendered ABOVE (older)
+ *   next = message rendered BELOW (newer)
+ *
+ * Mobile rule:
+ *   same sender ABOVE → small TOP corner (connects upward)
+ *   same sender BELOW → small BOTTOM corner (connects downward)
+ *
+ * My messages (right side): right corners vary
+ */
+.same-prev-mine     { border-top-right-radius: 4px;  margin-top:    2px; }
+.not-same-prev-mine { border-top-right-radius: 20px; margin-top:    8px; }
+.same-next-mine     { border-bottom-right-radius: 4px;  margin-bottom: 2px; }
+.not-same-next-mine { border-bottom-right-radius: 20px; margin-bottom: 8px; }
 
-.same-next-theirs { border-top-left-radius: 4px; margin-top: 2px; }
-.not-same-next-theirs { border-top-left-radius: 20px; margin-top: 8px; }
-.same-prev-theirs { border-bottom-left-radius: 4px; margin-bottom: 2px; }
-.not-same-prev-theirs { border-bottom-left-radius: 20px; margin-bottom: 8px; }
-.message-bubble.their-message { border-top-right-radius: 20px; border-bottom-right-radius: 20px; }
+/* Their messages (left side): left corners vary */
+.same-prev-theirs     { border-top-left-radius: 4px;  margin-top:    2px; }
+.not-same-prev-theirs { border-top-left-radius: 20px; margin-top:    8px; }
+.same-next-theirs     { border-bottom-left-radius: 4px;  margin-bottom: 2px; }
+.not-same-next-theirs { border-bottom-left-radius: 20px; margin-bottom: 8px; }
 
-.pending-message {
-    opacity: 0.7;
-}
+.pending-message { opacity: 0.7; }
 
+/* ── Text ── */
 .message-text {
     font-size: 15px;
     line-height: 20px;
     white-space: pre-wrap;
 }
 
-.my-message-text {
-    color: #FFFFFF;
-}
+.my-message-text    { color: #FFFFFF; }
+.their-message-text { color: rgba(60, 60, 60, 0.9); }
 
-.their-message-text {
-    color: rgba(60, 60, 60, 0.9);
-}
+.my-link-text    { color: #E0F2F1; text-decoration: underline; }
+.their-link-text { color: #0A9168; text-decoration: underline; }
 
-.my-link-text {
-    color: #E0F2F1;
-    text-decoration: underline;
-}
-
-.their-link-text {
-    color: #0A9168;
-    text-decoration: underline;
-}
-
+/* ── System messages — centered pill ── */
 .system-message-container {
     align-self: center;
-    background-color: rgba(0, 0, 0, 0.05);
-    padding: 4px 12px;
-    border-radius: 12px;
-    margin: 12px 0;
+    background-color: rgba(10, 145, 104, 0.08);
+    padding: 4px 14px;
+    border-radius: 14px;
+    margin: 8px 0;
     text-align: center;
+    max-width: 85%;
 }
 
-.system-message-text {
-    font-size: 12px;
-    color: rgba(60, 60, 60, 0.7);
-}
+.system-message-text { font-size: 12px; color: rgba(10, 145, 104, 0.85); font-weight: 500; }
+.system-message-time { font-size: 10px; color: rgba(60, 60, 60, 0.5); margin-left: 6px; }
 
-.system-message-time {
-    font-size: 10px;
-    color: rgba(60, 60, 60, 0.5);
-    margin-left: 6px;
-}
-
+/* ── Attachments ── */
 .attachment-stack {
     display: flex;
     flex-direction: column;
@@ -140,16 +137,142 @@
 }
 
 .attachment-image {
-    max-width: 100%;
+    max-width: 240px;
     border-radius: 14px;
     object-fit: contain;
+    display: block;
 }
 
 .attachment-file {
     display: inline-block;
     padding: 8px;
-    background: rgba(0,0,0,0.1);
+    background: rgba(0, 0, 0, 0.1);
     border-radius: 8px;
     text-decoration: none;
     color: inherit;
+    font-size: 14px;
+}
+
+/* ── Audio attachment ── */
+.attachment-audio audio {
+    display: block;
+    outline: none;
+}
+.attachment-audio--mine audio { filter: brightness(1.1); }
+
+/* ── Video attachment ── */
+.attachment-video video {
+    display: block;
+    border-radius: 8px;
+}
+
+/* ── Interactive form ── */
+.interactive-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0;
+    min-width: 220px;
+    max-width: 300px;
+}
+
+.iform-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.iform-field--checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.iform-label {
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.75;
+}
+
+.iform-input,
+.iform-select,
+.iform-textarea {
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    background: rgba(255, 255, 255, 0.6);
+    outline: none;
+    resize: vertical;
+}
+.interactive-form--mine .iform-input,
+.interactive-form--mine .iform-select,
+.interactive-form--mine .iform-textarea {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: inherit;
+}
+
+.iform-response {
+    font-size: 13px;
+    padding: 4px 0;
+}
+.iform-response-by {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-left: 6px;
+}
+
+.iform-submit {
+    align-self: flex-end;
+    padding: 6px 16px;
+    border-radius: 20px;
+    border: none;
+    background: #0a9168;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.iform-submit:disabled { opacity: 0.5; cursor: default; }
+
+.iform-done {
+    font-size: 12px;
+    color: #0a9168;
+    margin: 0;
+    text-align: right;
+}
+
+/* ── Reaction badges — direct child of message-wrapper, below the content row ── */
+.reaction-badges {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 2px;
+}
+
+/* Mine (right-side bubble): align the badge row to the right, badges from left (toward center) */
+.reaction-badges--mine {
+    align-self: flex-end;
+    justify-content: flex-start;
+    padding-right: 8px;
+}
+
+/* Theirs (left-side bubble): align the badge row to the left, badges from right (toward center) */
+.reaction-badges--theirs {
+    align-self: flex-start;
+    justify-content: flex-end;
+    padding-left: 8px;
+}
+
+.reaction-badge {
+    font-size: 13px;
+    background: #fff;
+    border: 1.5px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    padding: 1px 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    line-height: 1.4;
+    cursor: default;
 }

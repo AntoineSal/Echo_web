@@ -1,0 +1,196 @@
+/* ── Overlay ── */
+.aam-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+/* ── Modal ── */
+.aam-modal {
+    background: rgba(255, 255, 255, 0.97);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 440px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+/* ── Header ── */
+.aam-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    color: rgba(10, 145, 104, 1);
+    flex-shrink: 0;
+}
+.aam-title {
+    flex: 1;
+    font-size: 16px;
+    font-weight: 700;
+    color: #1f2937;
+}
+.aam-close {
+    background: none; border: none; cursor: pointer;
+    color: #9ca3af; display: flex; align-items: center; padding: 4px;
+    border-radius: 8px; transition: color 0.12s, background 0.12s;
+}
+.aam-close:hover { color: #374151; background: rgba(0,0,0,0.06); }
+
+/* ── Tabs ── */
+.aam-tabs {
+    display: flex;
+    padding: 8px 16px 0;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.aam-tab {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    border-radius: 10px 10px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #9ca3af;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+}
+.aam-tab--active {
+    color: rgba(10, 145, 104, 1);
+    border-bottom-color: rgba(10, 145, 104, 1);
+}
+
+/* ── Search ── */
+.aam-search-wrap {
+    padding: 10px 16px 6px;
+    flex-shrink: 0;
+}
+.aam-search {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 16px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: #1f2937;
+    background: rgba(245, 245, 245, 0.9);
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s;
+}
+.aam-search:focus { border-color: rgba(10, 145, 104, 0.35); background: #fff; }
+.aam-search::placeholder { color: #9ca3af; }
+
+/* ── List ── */
+.aam-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(10, 145, 104, 0.2) transparent;
+}
+
+/* ── Agent row ── */
+.aam-agent-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    transition: background 0.12s;
+}
+.aam-agent-row:hover { background: rgba(10, 145, 104, 0.05); }
+
+.aam-agent-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(10, 145, 104, 0.1);
+    border: 1.5px solid rgba(10, 145, 104, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+.aam-agent-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.aam-agent-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.aam-agent-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2937;
+}
+.aam-agent-desc {
+    font-size: 12px;
+    color: #6b7280;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.aam-fav-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #d1d5db;
+    transition: color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+.aam-fav-btn:hover { background: rgba(10, 145, 104, 0.08); color: rgba(10, 145, 104, 0.8); }
+.aam-fav-btn--active { color: rgba(10, 145, 104, 1); }
+
+/* ── Empty / loading ── */
+.aam-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 16px;
+    gap: 12px;
+    color: #9ca3af;
+    font-size: 13px;
+    text-align: center;
+    flex: 1;
+}
+.aam-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(10, 145, 104, 0.2);
+    border-top-color: rgba(10, 145, 104, 0.8);
+    border-radius: 50%;
+    animation: aam-spin 0.6s linear infinite;
+}
+@keyframes aam-spin { to { transform: rotate(360deg); } }

@@ -1,0 +1,457 @@
+/* ══════════════════════════════════════════════════════════
+   Shared styles for AddFriendPage / CreateGroupPage / AddAgentPage
+   ══════════════════════════════════════════════════════════ */
+
+.add-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    position: relative;
+    background: var(--bg-primary, #f7f9f8);
+    overflow: hidden;
+}
+
+/* ── Floating pill header (same as ConversationThread) ── */
+.add-page__header {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    height: 50px;
+    background: rgba(240, 240, 240, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 25px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    padding: 0 14px 0 8px;
+    z-index: 20;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.add-page__back-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    border: none;
+    background: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgba(60, 60, 60, 0.9);
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+.add-page__back-btn:hover { background: rgba(255, 255, 255, 0.8); }
+
+.add-page__header-icon {
+    color: rgba(10, 145, 104, 0.8);
+    flex-shrink: 0;
+}
+
+.add-page__header-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: rgba(60, 60, 60, 0.9);
+    flex: 1;
+}
+
+/* ── Scrollable content area ── */
+.add-page__content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 74px 24px 24px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(10, 145, 104, 0.2) transparent;
+}
+.add-page__content::-webkit-scrollbar { width: 4px; }
+.add-page__content::-webkit-scrollbar-thumb { background: rgba(10, 145, 104, 0.25); border-radius: 4px; }
+
+.add-page__content--cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ── Subtitle ── */
+.add-page__subtitle {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0 0 16px;
+    line-height: 1.5;
+}
+
+/* ── Search ── */
+.add-page__search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 20px;
+    padding: 0 14px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    margin-bottom: 16px;
+    height: 42px;
+}
+.add-page__search-icon { color: #9ca3af; flex-shrink: 0; }
+.add-page__search {
+    flex: 1;
+    border: none;
+    background: none;
+    outline: none;
+    font-size: 14px;
+    color: #1f2937;
+    font-family: inherit;
+    height: 100%;
+}
+.add-page__search::placeholder { color: #9ca3af; }
+
+/* ── User grid ── */
+.add-page__grid-wrap {
+    min-height: 200px;
+}
+
+.add-page__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 100px);
+    gap: 14px;
+    justify-content: start;
+}
+
+/* ── User square ── */
+.add-page__square {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    border-radius: 22%;
+    cursor: pointer;
+    border: none;
+    background: rgba(230, 230, 230, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 0;
+    transition: transform 0.1s, box-shadow 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.add-page__square:hover { transform: scale(1.04); }
+.add-page__square--selected {
+    box-shadow: 0 0 0 2.5px rgba(10, 145, 104, 0.9), 0 4px 14px rgba(10, 145, 104, 0.3);
+    background: white;
+}
+
+.add-page__square-avatar {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+}
+
+.add-page__square-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+    color: rgba(10, 145, 104, 0.8);
+    background: rgba(10, 145, 104, 0.1);
+    border-radius: inherit;
+}
+
+.add-page__check {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    background: rgba(10, 145, 104, 1);
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    border: 2px solid white;
+}
+
+.add-page__name-badge {
+    position: absolute;
+    bottom: 6px;
+    left: 5px;
+    right: 5px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    padding: 2px 4px;
+    text-align: center;
+    z-index: 3;
+}
+.add-page__name-badge span {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Empty state ── */
+.add-page__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 16px;
+    gap: 12px;
+    color: #9ca3af;
+    font-size: 14px;
+    text-align: center;
+}
+.add-page__empty-icon { color: rgba(10, 145, 104, 0.25); }
+
+.add-page__spinner {
+    width: 28px;
+    height: 28px;
+    border: 2.5px solid rgba(10, 145, 104, 0.15);
+    border-top-color: rgba(10, 145, 104, 0.75);
+    border-radius: 50%;
+    animation: addpage-spin 0.6s linear infinite;
+}
+@keyframes addpage-spin { to { transform: rotate(360deg); } }
+
+/* ── Footer CTA ── */
+.add-page__footer {
+    position: sticky;
+    bottom: 0;
+    padding: 12px 0 4px;
+    background: linear-gradient(to top, var(--bg-primary, #f7f9f8) 70%, transparent);
+}
+.add-page__cta {
+    width: 100%;
+    padding: 14px;
+    background: rgba(10, 145, 104, 1);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.add-page__cta:hover { background: rgba(7, 120, 85, 1); }
+
+/* ── Message step ── */
+.add-page__message-step {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.add-page__msg-input {
+    border: 1.5px solid rgba(0, 0, 0, 0.1);
+    border-radius: 16px;
+    padding: 14px;
+    font-size: 14px;
+    color: #1f2937;
+    resize: none;
+    font-family: inherit;
+    outline: none;
+    background: white;
+    transition: border-color 0.15s;
+    line-height: 1.5;
+}
+.add-page__msg-input:focus { border-color: rgba(10, 145, 104, 0.4); }
+.add-page__char-count { font-size: 11px; color: #9ca3af; text-align: right; }
+.add-page__done { color: rgba(10, 145, 104, 1); font-weight: 600; font-size: 14px; text-align: center; margin: 4px 0; }
+
+/* ── Button row ── */
+.add-page__btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+.add-page__btn-cancel {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: rgba(245, 245, 245, 0.9);
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.add-page__btn-send {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    background: rgba(10, 145, 104, 1);
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.15s;
+}
+.add-page__btn-send:hover:not(:disabled) { background: rgba(7, 120, 85, 1); }
+.add-page__btn-send:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Cards (group creation) ── */
+.add-page__card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    border-radius: 18px;
+    border: 1.5px solid rgba(10, 145, 104, 0.12);
+    background: linear-gradient(135deg, rgba(10, 145, 104, 0.07), rgba(10, 145, 104, 0.03));
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    width: 100%;
+}
+.add-page__card:hover {
+    background: linear-gradient(135deg, rgba(10, 145, 104, 0.12), rgba(10, 145, 104, 0.06));
+    border-color: rgba(10, 145, 104, 0.25);
+    transform: translateY(-1px);
+}
+.add-page__card--active {
+    border-color: rgba(10, 145, 104, 0.45);
+    background: linear-gradient(135deg, rgba(10, 145, 104, 0.13), rgba(10, 145, 104, 0.08));
+}
+.add-page__card-icon {
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    background: rgba(10, 145, 104, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #065f46;
+    flex-shrink: 0;
+}
+.add-page__card-text { display: flex; flex-direction: column; gap: 4px; }
+.add-page__card-title { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+.add-page__card-desc { font-size: 13px; color: #6b7280; line-height: 1.4; }
+
+/* ── Expandable form (group creation) ── */
+.add-page__form-wrap {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+.add-page__form-wrap--open { max-height: 600px; }
+.add-page__form {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid rgba(10, 145, 104, 0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    margin-top: 4px;
+}
+.add-page__label { font-size: 13px; font-weight: 600; color: #374151; margin-top: 8px; }
+.add-page__label:first-child { margin-top: 0; }
+.add-page__input, .add-page__textarea {
+    border: 1.5px solid rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: #1f2937;
+    background: #fafafa;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s;
+    resize: none;
+}
+.add-page__input:focus, .add-page__textarea:focus {
+    border-color: rgba(10, 145, 104, 0.4);
+    background: white;
+}
+.add-page__info-box {
+    background: rgba(10, 145, 104, 0.08);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #065f46;
+    line-height: 1.4;
+    margin: 4px 0;
+}
+
+/* ── Tabs (agent page) ── */
+.add-page__tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 12px;
+    padding: 4px;
+}
+.add-page__tab {
+    flex: 1;
+    padding: 8px;
+    border: none;
+    background: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.add-page__tab--active { background: white; color: rgba(10, 145, 104, 1); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+
+/* ── Agent list ── */
+.add-page__agent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.add-page__agent-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 10px;
+    border-radius: 14px;
+    transition: background 0.12s;
+}
+.add-page__agent-row:hover { background: rgba(10, 145, 104, 0.05); }
+.add-page__agent-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(10, 145, 104, 0.1);
+    border: 1.5px solid rgba(10, 145, 104, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+.add-page__agent-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.add-page__agent-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.add-page__agent-name { font-size: 14px; font-weight: 600; color: #1f2937; }
+.add-page__agent-desc { font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.add-page__fav-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: none; background: none;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    color: #d1d5db; transition: color 0.15s, background 0.15s; flex-shrink: 0;
+}
+.add-page__fav-btn:hover { background: rgba(10, 145, 104, 0.08); color: rgba(10, 145, 104, 0.8); }
+.add-page__fav-btn--active { color: rgba(10, 145, 104, 1); }

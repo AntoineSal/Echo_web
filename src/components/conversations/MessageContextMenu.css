@@ -1,0 +1,77 @@
+.msg-ctx-menu {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 8px 6px;
+  min-width: 200px;
+  user-select: none;
+}
+
+.msg-ctx-menu__reactions {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 4px 6px 8px;
+  gap: 2px;
+}
+
+.msg-ctx-menu__emoji {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 10px;
+  transition: transform 0.1s, background 0.1s;
+  line-height: 1;
+}
+
+.msg-ctx-menu__emoji:hover {
+  transform: scale(1.25);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.msg-ctx-menu__divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.08);
+  margin: 2px 4px 6px;
+}
+
+.msg-ctx-menu__action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.msg-ctx-menu__action:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.msg-ctx-menu__action--danger {
+  color: #dc2626;
+}
+
+.msg-ctx-menu__action--danger:hover {
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.msg-ctx-menu__action-icon {
+  font-size: 15px;
+  width: 20px;
+  text-align: center;
+}
