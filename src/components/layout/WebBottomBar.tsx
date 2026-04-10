@@ -251,12 +251,6 @@ export default function WebBottomBar() {
 
                 {/* Main input row */}
                 <div className="web-bottom-bar__row">
-                    {/* Target label */}
-                    <div className="web-bottom-bar__target">
-                        <IoSparkles size={14} />
-                        <span>{isChat ? (selectedConversation.name || 'Conversation') : 'Jarvis'}</span>
-                    </div>
-
                     {/* Attachment button (chat only) */}
                     {isChat && (
                         <>
@@ -305,7 +299,7 @@ export default function WebBottomBar() {
                             ref={textareaRef}
                             className="web-bottom-bar__input"
                             rows={1}
-                            placeholder={isChat ? 'Message…' : 'Demande à Jarvis…'}
+                            placeholder={isChat ? `Message pour ${selectedConversation.name || 'Conversation'}…` : 'Demande à Jarvis…'}
                             value={text}
                             onChange={handleTextChange}
                             onKeyDown={handleKeyDown}

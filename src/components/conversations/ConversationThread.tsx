@@ -69,27 +69,12 @@ interface AgentCardProps {
 function AgentCard({ msg, threadMessages, conversationId, isAutoExpanded, onThreadSend, conversationAvatar }: AgentCardProps) {
     const { user } = useAuth();
     const [expanded, setExpanded] = useState(isAutoExpanded);
-    const [threadText, setThreadText] = useState('');
-    const threadInputRef = useRef<HTMLInputElement>(null);
     const agentName = resolveAgentName(msg);
     const preview = getContentPreview(msg.content ?? '');
 
     const formattedTime = msg.created_at
         ? new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
         : '';
-
-    const handleThreadSend = () => {
-        if (!threadText.trim()) return;
-        onThreadSend(threadText.trim(), msg.uuid);
-        setThreadText('');
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleThreadSend();
-        }
-    };
 
     return (
         <div className={`agent-card ${expanded ? 'agent-card--expanded' : ''}`}>
@@ -187,27 +172,6 @@ function AgentCard({ msg, threadMessages, conversationId, isAutoExpanded, onThre
                     </div>
                 )}
 
-                {/* Thread input */}
-                <div className="agent-card__thread-input">
-                    <input
-                        ref={threadInputRef}
-                        type="text"
-                        className="agent-card__thread-input-field"
-                        placeholder="Répondre à l'agent…"
-                        value={threadText}
-                        onChange={e => setThreadText(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                    />
-                    <button
-                        type="button"
-                        className={`agent-card__thread-send ${threadText.trim() ? 'active' : ''}`}
-                        onClick={handleThreadSend}
-                        disabled={!threadText.trim()}
-                        aria-label="Envoyer"
-                    >
-                        <IoSend size={13} />
-                    </button>
-                </div>
             </div>
         </div>
     );

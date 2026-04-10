@@ -27,20 +27,11 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
 
   const isPanelOpen = PAGES_WITH_PANEL.includes(currentPage);
 
-  const handleResize = useCallback((newWidth: number) => {
-    setPanelWidth(newWidth);
-  }, []);
-
-  const handleResizeStart = useCallback(() => {
-    setIsResizingSidebar(true);
-  }, []);
-
-  const handleResizeEnd = useCallback(() => {
-    setIsResizingSidebar(false);
-  }, []);
-
   const userPhoto = user?.photo_profil_url || user?.photo_profil || null;
   const userName = user?.username || user?.first_name || undefined;
+
+  // The sidebar is wider when we need more columns (like conversations)
+  const expandedWidth = 365;
 
   return (
     <div className="app-layout">
@@ -49,29 +40,16 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
           activePage={currentPage}
           onNavigate={navigate}
           panelContent={isPanelOpen ? panelContent(currentPage) : null}
-          panelWidth={panelWidth}
+          panelWidth={currentPage === 'conversations' ? expandedWidth : SIDEBAR_PANEL_DEFAULT_WIDTH}
           isPanelOpen={isPanelOpen}
-          isResizing={isResizingSidebar}
+          isResizing={false}
           userPhoto={userPhoto}
           userName={userName}
           isLoggedIn={isLoggedIn}
           onLogout={logout}
         />
 
-        {isPanelOpen && currentPage !== 'conversations' && (
-          <SidebarResizer
-            onResize={handleResize}
-            onResizeStart={handleResizeStart}
-            onResizeEnd={handleResizeEnd}
-            isResizing={isResizingSidebar}
-            minWidth={SIDEBAR_PANEL_MIN_WIDTH}
-            maxWidth={SIDEBAR_PANEL_MAX_WIDTH}
-            snapPoints={SIDEBAR_PANEL_SNAP_WIDTHS}
-            snapThreshold={48}
-          />
-        )}
-
-        <main className={`app-layout__main ${isResizingSidebar ? 'app-layout__main--resizing' : ''}`}>
+        <main className="app-layout__main">
           {children(currentPage)}
         </main>
       </div>
