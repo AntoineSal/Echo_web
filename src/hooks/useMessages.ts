@@ -390,6 +390,21 @@ export function useMessages(conversationId: string | null) {
     const sendMessageMutation = useMutation({
         mutationFn: async ({ conversationId, content, parentMessageUuid, files }: SendMessageParams) => {
             const tempUuid = `temp-${Date.now()}`;
+            
+            // Generate optimistic attachment previews
+            const optimisticAttachments: Attachment[] = [];
+            if (files && files.length > 0) {
+                files.forEach((file, index) => {
+                    const isImage = file.type.startsWith('image/');
+                    optimisticAttachments.push({
+                        uuid: `temp-att-${Date.now()}-${index}`,
+                        file_type: isImage ? 'image' : (file.type.startsWith('video/') ? 'video' : 'document'),
+                        file_url: isImage ? URL.createObjectURL(file) : '',
+                        original_filename: file.name
+                    });
+                });
+            }
+
             const optimisticMessage: Message = {
                 id: Date.now(),
                 uuid: tempUuid,
@@ -400,6 +415,7 @@ export function useMessages(conversationId: string | null) {
                 created_at: new Date().toISOString(),
                 isPending: true,
                 parent_message_uuid: parentMessageUuid,
+                attachments: optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
             };
 
             if (user?.uuid) {
@@ -420,29 +436,95 @@ export function useMessages(conversationId: string | null) {
             queryClient.invalidateQueries({ queryKey: ['conversations'] });
 
             let res: Response;
-
-            if (files && files.length > 0) {
-                // Send with attachments
-                const formData = new FormData();
-                if (content.trim()) formData.append('content', content);
-                if (parentMessageUuid) formData.append('parent_message_uuid', parentMessageUuid);
-                files.forEach((file) => formData.append('files', file));
-                res = await fetchWithAuth(
-                    `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create-with-attachments/`,
-                    { method: 'POST', body: formData }
-                );
-            } else {
-                res = await fetchWithAuth(
-                    `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create/`,
-                    {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ content, parent_message_uuid: parentMessageUuid }),
+            
+            try {
+                // Step 1: Upload files if any
+                const attachmentUuids: string[] = [];
+                if (files && files.length > 0) {
+                    for (const file of files) {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        
+                        const uploadRes = await fetchWithAuth(
+                            `${API_BASE_URL}/messaging/attachments/upload/`,
+                            { method: 'POST', body: formData }
+                        );
+                        
+                        if (!uploadRes.ok) {
+                            throw new Error('Failed to upload file');
+                        }
+                        
+                        const uploadData = await uploadRes.json();
+                        if (uploadData && uploadData.uuid) {
+                            attachmentUuids.push(uploadData.uuid);
+                        }
                     }
-                );
-            }
+                }
 
-            if (!res.ok) {
+                // Step 2: Send message payload
+                if (attachmentUuids.length > 0) {
+                    res = await fetchWithAuth(
+                        `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create-with-attachments/`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                content, 
+                                parent_message_uuid: parentMessageUuid,
+                                attachment_uuids: attachmentUuids 
+                            }),
+                        }
+                    );
+                } else {
+                    res = await fetchWithAuth(
+                        `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create/`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content, parent_message_uuid: parentMessageUuid }),
+                        }
+                    );
+                }
+
+                if (!res.ok) {
+                    throw new Error('Failed to send message');
+                }
+
+                const payload = await res.json().catch(() => null);
+
+                if (user?.uuid) {
+                    if (payload && typeof payload === 'object' && 'uuid' in payload) {
+                        webLogger.info('messages', 'Persisting confirmed sent message locally', {
+                            ownerUuid: user.uuid,
+                            conversationUuid: conversationId,
+                            messageUuid: String((payload as Record<string, unknown>).uuid || ''),
+                        });
+                        
+                        // Delete optimistic message since it will be replaced by the real one from REST/WS
+                        // (Usually upsert overrides it, but the tempUuid was different. So we must mark the temp as failed or delete it).
+                        // Let's just rely on the existing logic which upserts the payload. 
+                        // Wait, previous code just upserted the new payload without deleting temp. 
+                        // We will keep the previous code structure.
+                        await webDatabaseManager.upsertMessage({
+                            conversation_uuid: conversationId,
+                            ...(payload as Record<string, unknown>),
+                        }, user.uuid);
+                        await webDatabaseManager.updateConversationFromMessage(
+                            conversationId,
+                            user.uuid,
+                            {
+                                conversation_uuid: conversationId,
+                                ...(payload as Record<string, unknown>),
+                            }
+                        );
+                    }
+
+                    await syncLatestMessagesForConversation(user.uuid, conversationId);
+                }
+
+                return payload;
+                
+            } catch (error) {
                 if (user?.uuid) {
                     await webDatabaseManager.updateMessageSyncStatus(tempUuid, user.uuid, 'failed');
                     queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
@@ -451,38 +533,10 @@ export function useMessages(conversationId: string | null) {
                     ownerUuid: user?.uuid ?? null,
                     conversationUuid: conversationId,
                     tempUuid,
-                    status: res.status,
+                    error: error instanceof Error ? error.message : String(error),
                 });
-                throw new Error('Failed to send message');
+                throw error;
             }
-
-            const payload = await res.json().catch(() => null);
-
-            if (user?.uuid) {
-                if (payload && typeof payload === 'object' && 'uuid' in payload) {
-                    webLogger.info('messages', 'Persisting confirmed sent message locally', {
-                        ownerUuid: user.uuid,
-                        conversationUuid: conversationId,
-                        messageUuid: String((payload as Record<string, unknown>).uuid || ''),
-                    });
-                    await webDatabaseManager.upsertMessage({
-                        conversation_uuid: conversationId,
-                        ...(payload as Record<string, unknown>),
-                    }, user.uuid);
-                    await webDatabaseManager.updateConversationFromMessage(
-                        conversationId,
-                        user.uuid,
-                        {
-                            conversation_uuid: conversationId,
-                            ...(payload as Record<string, unknown>),
-                        }
-                    );
-                }
-
-                await syncLatestMessagesForConversation(user.uuid, conversationId);
-            }
-
-            return payload;
         },
         onSuccess: (_data, variables) => {
             queryClient.invalidateQueries({ queryKey: ['messages', variables.conversationId] });

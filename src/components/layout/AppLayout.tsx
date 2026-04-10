@@ -58,7 +58,7 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
           onLogout={logout}
         />
 
-        {isPanelOpen && (
+        {isPanelOpen && currentPage !== 'conversations' && (
           <SidebarResizer
             onResize={handleResize}
             onResizeStart={handleResizeStart}

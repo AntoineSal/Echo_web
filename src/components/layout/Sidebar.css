@@ -14,7 +14,7 @@
     background: var(--emerald-bg);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
-    border-radius: 22px;
+    border-radius: 32px;
     box-shadow:
         0 8px 32px rgba(67, 180, 146, 0.25),
         0 2px 8px rgba(0, 0, 0, 0.06);
@@ -34,7 +34,7 @@
     content: '';
     position: absolute;
     inset: 1px;
-    border-radius: 21px;
+    border-radius: 31px;
     background:
         radial-gradient(circle at top left, rgba(255, 255, 255, 0.2), transparent 38%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
@@ -180,11 +180,11 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: 16px 14px;
-    /* Override text colors for content inside green */
     color: rgba(255, 255, 255, 0.95);
     transition:
         opacity 180ms ease,
         transform 220ms ease;
+    scrollbar-width: none; /* Firefox */
 }
 
 .sidebar__panel:not(.sidebar__panel--open) .sidebar__panel-content {
@@ -232,13 +232,9 @@
     color: rgba(255, 255, 255, 0.7);
 }
 
-/* Scrollbar inside green panel */
-.sidebar__panel-content::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.sidebar__panel-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.35);
+/* Hide scrollbar entirely */
+.sidebar__panel-content::-webkit-scrollbar {
+    display: none;
 }
 
 /* ── User section at bottom of rail ── */
