@@ -7,6 +7,14 @@ export interface ChatSendCallback {
     sendFiles: (text: string, files: File[], parentMessageUuid?: string | null) => void;
 }
 
+/** Minimal message info needed to display a reply preview */
+export interface ReplyTarget {
+    uuid: string;
+    sender_username: string;
+    content: string;
+    attachments?: { file_type: string }[];
+}
+
 interface NavigationContextType {
     currentPage: PageId;
     selectedConversation: Conversation | null;
@@ -19,6 +27,9 @@ interface NavigationContextType {
     /** Registered by ConversationThread so WebBottomBar can trigger sends */
     registerSendCallback: (cb: ChatSendCallback | null) => void;
     sendCallback: React.RefObject<ChatSendCallback | null>;
+    /** Reply-to state shared between ConversationThread and WebBottomBar */
+    replyTo: ReplyTarget | null;
+    setReplyTo: (target: ReplyTarget | null) => void;
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined);
@@ -35,6 +46,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
     const [currentPage, setCurrentPage] = useState<PageId>('home');
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
     const [conversationView, setConversationView] = useState<'thread' | 'management'>('thread');
+    const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
     const sendCallbackRef = useRef<ChatSendCallback | null>(null);
 
     const CONV_PAGES = new Set<PageId>(['conversations', 'groups', 'agents', 'add-friend', 'add-group', 'add-agent']);
@@ -59,12 +71,14 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
         setSelectedConversation(conv);
         setConversationView('thread');
         setCurrentPage(CONV_TYPE_TO_PAGE[conv.conversation_type] ?? 'conversations');
+        setReplyTo(null);
     }, []);
 
     const closeConversation = useCallback(() => {
         setSelectedConversation(null);
         setConversationView('thread');
         sendCallbackRef.current = null;
+        setReplyTo(null);
     }, []);
 
     const openConversationManagement = useCallback(() => {
@@ -91,6 +105,8 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
             closeConversationManagement,
             registerSendCallback,
             sendCallback: sendCallbackRef,
+            replyTo,
+            setReplyTo,
         }}>
             {children}
         </NavigationContext.Provider>

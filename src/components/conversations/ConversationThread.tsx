@@ -223,7 +223,10 @@ export function ConversationThread({
     const { user } = useAuth();
     const { messages, isLoading, isFetchingMore, hasMore, loadMore, sendMessage, markAsRead } = useMessages(conversationId);
     const { isConnected } = useWebSocketMessages(conversationId);
-    const { closeConversation, registerSendCallback, openConversationManagement } = useNavigation();
+    const { closeConversation, registerSendCallback, openConversationManagement, replyTo, setReplyTo } = useNavigation();
+    const replyToRef = useRef(replyTo);
+    replyToRef.current = replyTo;
+
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const topHistorySentinelRef = useRef<HTMLDivElement>(null);
     const scrollEndRef = useRef<HTMLDivElement>(null);
@@ -244,10 +247,21 @@ export function ConversationThread({
     useEffect(() => {
         registerSendCallback({
             sendText: (text, parentMessageUuid) => {
-                sendMutateRef.current({ conversationId, content: text, parentMessageUuid });
+                sendMutateRef.current({
+                    conversationId,
+                    content: text,
+                    parentMessageUuid: parentMessageUuid ?? replyToRef.current?.uuid,
+                });
+                setReplyTo(null);
             },
             sendFiles: (text, files, parentMessageUuid) => {
-                sendMutateRef.current({ conversationId, content: text, files, parentMessageUuid });
+                sendMutateRef.current({
+                    conversationId,
+                    content: text,
+                    files,
+                    parentMessageUuid: parentMessageUuid ?? replyToRef.current?.uuid,
+                });
+                setReplyTo(null);
             },
         });
         return () => registerSendCallback(null);
@@ -410,11 +424,22 @@ export function ConversationThread({
         [orderedMessages]
     );
 
+    // Fast uuid → message lookup (for reply quotes)
+    const messageByUuid = useMemo(() => {
+        const map = new Map<string, Message>();
+        for (const msg of orderedMessages) map.set(msg.uuid, msg);
+        return map;
+    }, [orderedMessages]);
+
     // Send a reaction
     const handleReact = useCallback((targetMessageUuid: string, emoji: string) => {
         const content = buildMessageReactionContent(targetMessageUuid, emoji);
         sendMutateRef.current({ conversationId, content });
     }, [conversationId]);
+
+    const handleReply = useCallback((msg: Message) => {
+        setReplyTo({ uuid: msg.uuid, sender_username: msg.sender_username, content: msg.content, attachments: msg.attachments });
+    }, [setReplyTo]);
 
     const showStatusDot = isConnected && (isAgentConversation || conversationType === 'direct');
 
@@ -497,6 +522,10 @@ export function ConversationThread({
                                 ? a.sender_uuid === b.sender_uuid
                                 : a.sender_username === b.sender_username);
 
+                        const replyParent = msg.parent_message_uuid
+                            ? (messageByUuid.get(msg.parent_message_uuid) ?? null)
+                            : null;
+
                         return (
                             <MessageBubble
                                 key={msg.uuid || msg.id}
@@ -507,7 +536,9 @@ export function ConversationThread({
                                 isSameSenderAsPrev={sameSender(prevNormal, msg)}
                                 isGroupConversation={isGroupConversation}
                                 reactionEmojis={reactionByMessageUuid[msg.uuid] || []}
+                                replyParent={replyParent}
                                 onReact={handleReact}
+                                onReply={handleReply}
                             />
                         );
                         })}
@@ -516,7 +547,6 @@ export function ConversationThread({
                 <div ref={scrollEndRef} />
             </div>
 
-            <div style={{ height: 8 }} />
         </div>
     );
 }

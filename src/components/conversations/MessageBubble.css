@@ -22,8 +22,12 @@
 .message-content-row {
     display: flex;
     flex-direction: row;
-    align-items: flex-end;
+    align-items: center;
     max-width: 80%;
+}
+
+.message-content-row--mine {
+    justify-content: flex-end;
 }
 
 .timestamp-container-left {
@@ -36,6 +40,10 @@
 }
 
 .timestamp-container-right {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
     margin-left: 6px;
     flex-shrink: 0;
 }
@@ -48,7 +56,7 @@
 .status-icon          { font-size: 12px; }
 .status-icon.pending  { color: #999; }
 .status-icon.delivered { color: #999; }
-.status-icon.read     { color: #4CAF50; font-weight: bold; }
+.status-icon.read     { color: #4CAF50; font-weight: bold; letter-spacing: -3px; }
 .status-icon.error    { color: #F44336; }
 
 /* ── Bubble base ── */
@@ -57,7 +65,65 @@
     position: relative;
     word-break: break-word;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    transition: filter 0.1s ease;
 }
+
+.message-bubble:hover {
+    filter: brightness(0.96);
+}
+
+/* Active state — bubble lifts above the backdrop */
+.message-bubble--active {
+    transform: scale(1.04);
+    transition: transform 0.15s ease;
+    filter: none !important;
+}
+
+/* ── Reply quote — shown at top of bubble when replying to a message ── */
+.reply-quote {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    border-radius: 8px;
+    padding: 5px 10px;
+    margin-bottom: 6px;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.reply-quote--mine {
+    background: rgba(255, 255, 255, 0.18);
+    border-left: 3px solid rgba(255, 255, 255, 0.6);
+}
+
+.reply-quote--theirs {
+    background: rgba(0, 0, 0, 0.06);
+    border-left: 3px solid rgba(10, 145, 104, 0.5);
+}
+
+.reply-quote__sender {
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.reply-quote--mine .reply-quote__sender { color: rgba(255, 255, 255, 0.9); }
+.reply-quote--theirs .reply-quote__sender { color: rgba(10, 145, 104, 0.9); }
+
+.reply-quote__text {
+    font-size: 12px;
+    opacity: 0.75;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.reply-quote--mine .reply-quote__text { color: #fff; }
+.reply-quote--theirs .reply-quote__text { color: rgba(60, 60, 60, 0.85); }
 
 /* My messages — matches mobile: ECHO_COLOR, opacity 0.7 */
 .my-message {
@@ -243,36 +309,46 @@
     text-align: right;
 }
 
-/* ── Reaction badges — direct child of message-wrapper, below the content row ── */
+/* ── Reaction chips — absolute, anchored to bubble bottom, toward screen center ── */
+
+/* Extra bottom margin on the bubble when reactions are present */
+.message-bubble.has-reaction {
+    margin-bottom: 14px;
+}
+
 .reaction-badges {
+    position: absolute;
+    bottom: -13px;
     display: flex;
     flex-direction: row;
-    flex-wrap: wrap;
     gap: 3px;
-    margin-top: 2px;
+    z-index: 5;
 }
 
-/* Mine (right-side bubble): align the badge row to the right, badges from left (toward center) */
+/* Mine (right-side bubble): chips emerge from the LEFT edge (toward center) */
 .reaction-badges--mine {
-    align-self: flex-end;
-    justify-content: flex-start;
-    padding-right: 8px;
+    left: -13px;
 }
 
-/* Theirs (left-side bubble): align the badge row to the left, badges from right (toward center) */
+/* Theirs (left-side bubble): chips emerge from the RIGHT edge (toward center) */
 .reaction-badges--theirs {
-    align-self: flex-start;
-    justify-content: flex-end;
-    padding-left: 8px;
+    right: -13px;
 }
 
+/* Each chip: circular, double-ring visual matching mobile */
 .reaction-badge {
-    font-size: 13px;
-    background: #fff;
-    border: 1.5px solid rgba(0, 0, 0, 0.08);
-    border-radius: 10px;
-    padding: 1px 6px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    line-height: 1.4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    /* outer ring — matches chat bg to create cut-out illusion */
+    background: rgb(245, 250, 245);
+    border: 2px solid rgb(245, 250, 245);
+    box-shadow: 0 1.5px 4px rgba(0, 0, 0, 0.15);
     cursor: default;
+    /* inner white circle via nested visual (font only, no extra div) */
+    font-size: 14px;
+    line-height: 1;
 }

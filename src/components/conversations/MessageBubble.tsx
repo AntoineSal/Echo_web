@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import type { Message, InteractiveMessageData, FormField } from '../../hooks/useMessages';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchWithAuth } from '@mobile/services/apiClient';
@@ -14,7 +14,9 @@ interface MessageBubbleProps {
     isSameSenderAsPrev: boolean;
     isGroupConversation?: boolean;
     reactionEmojis?: string[];
+    replyParent?: Message | null;
     onReact?: (messageUuid: string, emoji: string) => void;
+    onReply?: (message: Message) => void;
 }
 
 // ── Audio player ─────────────────────────────────────────────────────────────
@@ -158,10 +160,13 @@ export function MessageBubble({
     isSameSenderAsPrev,
     isGroupConversation = false,
     reactionEmojis,
+    replyParent,
     onReact,
+    onReply,
 }: MessageBubbleProps) {
     const { user } = useAuth();
-    const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+    const [ctxMenu, setCtxMenu] = useState<DOMRect | null>(null);
+    const bubbleRef = useRef<HTMLDivElement>(null);
 
     const isMe =
         (message.sender_uuid && user?.uuid && message.sender_uuid === user.uuid) ||
@@ -169,9 +174,11 @@ export function MessageBubble({
 
     const isSystemMessage = message.message_type === 'system';
 
-    const handleContextMenu = useCallback((e: React.MouseEvent) => {
-        e.preventDefault();
-        setCtxMenu({ x: e.clientX, y: e.clientY });
+    const handleClick = useCallback((e: React.MouseEvent) => {
+        // Don't open menu when clicking interactive elements inside the bubble
+        const target = e.target as HTMLElement;
+        if (target.closest('a, button, input, select, textarea, audio, video')) return;
+        if (bubbleRef.current) setCtxMenu(bubbleRef.current.getBoundingClientRect());
     }, []);
 
     const handleCopy = useCallback(() => {
@@ -179,13 +186,16 @@ export function MessageBubble({
     }, [message.content]);
 
     const handleReport = useCallback(() => {
-        // TODO: open report modal
         alert('Signalement envoyé');
     }, []);
 
     const handleReact = useCallback((emoji: string) => {
         onReact?.(message.uuid, emoji);
     }, [message.uuid, onReact]);
+
+    const handleReply = useCallback(() => {
+        onReply?.(message);
+    }, [message, onReply]);
 
     if (isSystemMessage) {
         return (
@@ -231,30 +241,35 @@ export function MessageBubble({
     return (
         <>
             <div
-                className={`message-wrapper ${isMe ? 'message-wrapper-mine' : 'message-wrapper-theirs'}`}
-                onContextMenu={handleContextMenu}
+                className={`message-wrapper ${isMe ? 'message-wrapper-mine' : 'message-wrapper-theirs'}${ctxMenu ? ' message-wrapper--active' : ''}`}
+                style={ctxMenu ? { position: 'relative', zIndex: 9999 } : undefined}
             >
                 {!isMe && isFirstInGroup && isGroupConversation && (
                     <div className="sender-name">{message.sender_username}</div>
                 )}
 
-                <div className="message-content-row">
-                    {isMe && (
+                <div className={`message-content-row${isMe ? ' message-content-row--mine' : ''}`}>
+                    {!isMe && (
                         <div className="timestamp-container-left">
-                            {message.isPending ? (
-                                <span className="status-icon pending">◷</span>
-                            ) : message.sendError ? (
-                                <span className="status-icon error">!</span>
-                            ) : message.is_read ? (
-                                <span className="status-icon read">✓✓</span>
-                            ) : (
-                                <span className="status-icon delivered">✓</span>
-                            )}
                             <span className="external-timestamp">{formattedTime}</span>
                         </div>
                     )}
 
-                    <div className={bubbleClasses.join(' ')}>
+                    <div
+                        ref={bubbleRef}
+                        className={`${bubbleClasses.join(' ')}${reactionEmojis && reactionEmojis.length > 0 ? ' has-reaction' : ''}${ctxMenu ? ' message-bubble--active' : ''}`}
+                        onClick={handleClick}
+                    >
+                        {/* Reply quote */}
+                        {replyParent && (
+                            <div className={`reply-quote ${isMe ? 'reply-quote--mine' : 'reply-quote--theirs'}`}>
+                                <span className="reply-quote__sender">{replyParent.sender_username}</span>
+                                <span className="reply-quote__text">
+                                    {replyParent.attachments?.length ? '📎 Pièce jointe' : (replyParent.content ?? '').slice(0, 80)}
+                                </span>
+                            </div>
+                        )}
+
                         {attachments.length > 0 && (
                             <div className="attachment-stack">
                                 {attachments.map(att => (
@@ -288,31 +303,41 @@ export function MessageBubble({
                                 {renderContent(message.content)}
                             </div>
                         )}
+
+                        {/* Reaction chips — positioned absolutely on the bubble, toward screen center */}
+                        {reactionEmojis && reactionEmojis.length > 0 && (
+                            <div className={`reaction-badges ${isMe ? 'reaction-badges--mine' : 'reaction-badges--theirs'}`}>
+                                {reactionEmojis.map((emoji, i) => (
+                                    <span key={i} className="reaction-badge">{emoji}</span>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
-                    {!isMe && (
+                    {isMe && (
                         <div className="timestamp-container-right">
+                            {message.isPending ? (
+                                <span className="status-icon pending">◷</span>
+                            ) : message.sendError ? (
+                                <span className="status-icon error">!</span>
+                            ) : message.is_read ? (
+                                <span className="status-icon read">✓✓</span>
+                            ) : (
+                                <span className="status-icon delivered">✓</span>
+                            )}
                             <span className="external-timestamp">{formattedTime}</span>
                         </div>
                     )}
                 </div>
-
-                {/* Reaction badges — outside the content row so they never shift the bubble */}
-                {reactionEmojis && reactionEmojis.length > 0 && (
-                    <div className={`reaction-badges ${isMe ? 'reaction-badges--mine' : 'reaction-badges--theirs'}`}>
-                        {reactionEmojis.map((emoji, i) => (
-                            <span key={i} className="reaction-badge">{emoji}</span>
-                        ))}
-                    </div>
-                )}
             </div>
 
             {ctxMenu && (
                 <MessageContextMenu
-                    x={ctxMenu.x}
-                    y={ctxMenu.y}
+                    bubbleRect={ctxMenu}
+                    isMe={!!isMe}
                     messageContent={message.content ?? ''}
                     onReact={handleReact}
+                    onReply={handleReply}
                     onCopy={handleCopy}
                     onReport={handleReport}
                     onClose={() => setCtxMenu(null)}

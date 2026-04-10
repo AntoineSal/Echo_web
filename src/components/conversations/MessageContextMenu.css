@@ -1,56 +1,77 @@
-.msg-ctx-menu {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 14px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.08);
-  padding: 8px 6px;
-  min-width: 200px;
-  user-select: none;
+/* ── Full-screen backdrop — blurs everything except the active bubble ── */
+.msg-ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.06);
 }
 
-.msg-ctx-menu__reactions {
+/* ── Shared panel base ── */
+.msg-ctx-reactions-panel,
+.msg-ctx-actions-panel {
+  position: fixed;
+  z-index: 1001;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.13), 0 2px 8px rgba(0, 0, 0, 0.06);
+  user-select: none;
+  animation: ctx-panel-in 0.15s ease;
+}
+
+@keyframes ctx-panel-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ── Reactions panel ── */
+.msg-ctx-reactions-panel {
+  border-radius: 22px;
+  padding: 6px 8px;
   display: flex;
   flex-direction: row;
   justify-content: space-between;
-  padding: 4px 6px 8px;
   gap: 2px;
 }
 
 .msg-ctx-menu__emoji {
   background: none;
   border: none;
-  font-size: 22px;
+  font-size: 24px;
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 10px;
-  transition: transform 0.1s, background 0.1s;
+  padding: 6px 7px;
+  border-radius: 14px;
+  transition: transform 0.12s ease, background 0.1s;
   line-height: 1;
 }
 
 .msg-ctx-menu__emoji:hover {
-  transform: scale(1.25);
+  transform: scale(1.35);
   background: rgba(0, 0, 0, 0.06);
 }
 
-.msg-ctx-menu__divider {
-  height: 1px;
-  background: rgba(0, 0, 0, 0.08);
-  margin: 2px 4px 6px;
+/* ── Actions panel ── */
+.msg-ctx-actions-panel {
+  border-radius: 16px;
+  padding: 6px 5px;
+  display: flex;
+  flex-direction: column;
 }
 
 .msg-ctx-menu__action {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 14px;
   background: none;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   color: #1f2937;
   font-family: inherit;
@@ -71,7 +92,6 @@
 }
 
 .msg-ctx-menu__action-icon {
-  font-size: 15px;
-  width: 20px;
-  text-align: center;
+  flex-shrink: 0;
+  opacity: 0.7;
 }

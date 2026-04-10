@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { IoSend, IoSparkles, IoAttach, IoClose } from 'react-icons/io5';
+import { IoSend, IoSparkles, IoAttach, IoClose, IoArrowUndoOutline } from 'react-icons/io5';
 import { useJarvis } from '../../contexts/JarvisContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useAgentFramework, type Agent } from '../../hooks/useAgentFramework';
@@ -86,7 +86,7 @@ function AgentPicker({
 // ── Main component ─────────────────────────────────────────────────────────
 export default function WebBottomBar() {
     const { sendJarvisMessage } = useJarvis();
-    const { selectedConversation, sendCallback, openConversation, navigate } = useNavigation();
+    const { selectedConversation, sendCallback, openConversation, navigate, replyTo, setReplyTo } = useNavigation();
     const { favoriteAgents, myAgents } = useAgentFramework();
     const { agentConversations } = useConversations();
     const queryClient = useQueryClient();
@@ -198,6 +198,28 @@ export default function WebBottomBar() {
         <footer className={`web-bottom-bar ${isChat ? 'web-bottom-bar--chat' : 'web-bottom-bar--jarvis'}`}>
 
             <div className="web-bottom-bar__inner">
+                {/* Reply preview */}
+                {isChat && replyTo && (
+                    <div className="wbb-reply-preview">
+                        <IoArrowUndoOutline size={13} className="wbb-reply-preview__icon" />
+                        <div className="wbb-reply-preview__accent" />
+                        <div className="wbb-reply-preview__text">
+                            <span className="wbb-reply-preview__sender">{replyTo.sender_username}</span>
+                            <span className="wbb-reply-preview__content">
+                                {replyTo.attachments?.length ? '📎 Pièce jointe' : (replyTo.content ?? '').slice(0, 80)}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            className="wbb-reply-preview__close"
+                            onClick={() => setReplyTo(null)}
+                            aria-label="Annuler la réponse"
+                        >
+                            <IoClose size={14} />
+                        </button>
+                    </div>
+                )}
+
                 {/* Staged files row */}
                 {stagedFiles.length > 0 && (
                     <div className="wbb-staged-row">

@@ -1,47 +1,88 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { IoCopyOutline, IoFlagOutline, IoArrowUndoOutline } from 'react-icons/io5';
 import './MessageContextMenu.css';
 
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '🔥'];
+const PANEL_WIDTH = 220;
+const GAP = 10; // gap between bubble edge and panel
 
 interface MessageContextMenuProps {
-  x: number;
-  y: number;
+  bubbleRect: DOMRect;
+  isMe: boolean;
   messageContent: string;
   onReact: (emoji: string) => void;
+  onReply: () => void;
   onCopy: () => void;
   onReport: () => void;
   onClose: () => void;
 }
 
-export function MessageContextMenu({ x, y, messageContent, onReact, onCopy, onReport, onClose }: MessageContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
+export function MessageContextMenu({
+  bubbleRect, isMe, messageContent, onReact, onReply, onCopy, onReport, onClose,
+}: MessageContextMenuProps) {
+  const reactionsRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const [positioned, setPositioned] = useState(false);
+  const [reactionsStyle, setReactionsStyle] = useState<React.CSSProperties>({ visibility: 'hidden' });
+  const [actionsStyle, setActionsStyle] = useState<React.CSSProperties>({ visibility: 'hidden' });
 
-  // Close on outside click or Escape
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
-    };
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
+    return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
-  // Adjust position so menu doesn't go off-screen
-  const menuStyle: React.CSSProperties = {
-    position: 'fixed',
-    left: Math.min(x, window.innerWidth - 220),
-    top: Math.min(y, window.innerHeight - 200),
-    zIndex: 1000,
-  };
+  // Compute positions after first render (to know panel heights)
+  useLayoutEffect(() => {
+    const rH = reactionsRef.current?.offsetHeight ?? 56;
+    const aH = actionsRef.current?.offsetHeight ?? 140;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Horizontal: align with the bubble's near edge
+    const left = isMe
+      ? Math.max(8, bubbleRect.right - PANEL_WIDTH)
+      : Math.min(bubbleRect.left, vw - PANEL_WIDTH - 8);
+
+    // Reactions above bubble, actions below — flip if not enough room
+    const spaceAbove = bubbleRect.top - GAP;
+    const spaceBelow = vh - bubbleRect.bottom - GAP;
+
+    let reactTop: number;
+    let actTop: number;
+
+    if (spaceAbove >= rH && spaceBelow >= aH) {
+      // Ideal: reactions above, actions below
+      reactTop = bubbleRect.top - rH - GAP;
+      actTop = bubbleRect.bottom + GAP;
+    } else if (spaceBelow >= rH + aH + GAP) {
+      // Both below
+      reactTop = bubbleRect.bottom + GAP;
+      actTop = bubbleRect.bottom + GAP + rH + GAP;
+    } else {
+      // Both above
+      actTop = bubbleRect.top - aH - GAP;
+      reactTop = actTop - rH - GAP;
+    }
+
+    setReactionsStyle({ position: 'fixed', top: Math.max(8, reactTop), left, width: PANEL_WIDTH });
+    setActionsStyle({ position: 'fixed', top: Math.max(8, actTop), left, width: PANEL_WIDTH });
+    setPositioned(true);
+  }, [bubbleRect, isMe]);
+
+  const visibility = positioned ? 'visible' : 'hidden';
 
   return (
-    <div ref={menuRef} className="msg-ctx-menu" style={menuStyle}>
-      {/* Quick emoji reactions */}
-      <div className="msg-ctx-menu__reactions">
+    <>
+      {/* Full-screen backdrop */}
+      <div className="msg-ctx-backdrop" onMouseDown={onClose} />
+
+      {/* Reactions panel — above bubble */}
+      <div
+        ref={reactionsRef}
+        className="msg-ctx-reactions-panel"
+        style={{ ...reactionsStyle, visibility }}
+      >
         {QUICK_REACTIONS.map(emoji => (
           <button
             key={emoji}
@@ -54,17 +95,29 @@ export function MessageContextMenu({ x, y, messageContent, onReact, onCopy, onRe
         ))}
       </div>
 
-      <div className="msg-ctx-menu__divider" />
+      {/* Actions panel — below bubble */}
+      <div
+        ref={actionsRef}
+        className="msg-ctx-actions-panel"
+        style={{ ...actionsStyle, visibility }}
+      >
+        <button type="button" className="msg-ctx-menu__action" onClick={() => { onReply(); onClose(); }}>
+          <IoArrowUndoOutline size={16} className="msg-ctx-menu__action-icon" />
+          Répondre
+        </button>
 
-      {/* Actions */}
-      <button type="button" className="msg-ctx-menu__action" onClick={() => { onCopy(); onClose(); }}>
-        <span className="msg-ctx-menu__action-icon">📋</span>
-        Copier le texte
-      </button>
-      <button type="button" className="msg-ctx-menu__action msg-ctx-menu__action--danger" onClick={() => { onReport(); onClose(); }}>
-        <span className="msg-ctx-menu__action-icon">🚩</span>
-        Signaler
-      </button>
-    </div>
+        {messageContent && (
+          <button type="button" className="msg-ctx-menu__action" onClick={() => { onCopy(); onClose(); }}>
+            <IoCopyOutline size={16} className="msg-ctx-menu__action-icon" />
+            Copier le texte
+          </button>
+        )}
+
+        <button type="button" className="msg-ctx-menu__action msg-ctx-menu__action--danger" onClick={() => { onReport(); onClose(); }}>
+          <IoFlagOutline size={16} className="msg-ctx-menu__action-icon" />
+          Signaler
+        </button>
+      </div>
+    </>
   );
 }
