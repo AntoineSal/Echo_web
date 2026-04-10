@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMessages, type Message } from '../../hooks/useMessages';
 import { useWebSocketMessages } from '../../hooks/useWebSocketMessages';
 import { useNavigation } from '../../contexts/NavigationContext';
@@ -221,10 +221,19 @@ export function ConversationThread({
     conversationType,
 }: ConversationThreadProps) {
     const { user } = useAuth();
-    const { messages, isLoading, sendMessage, markAsRead } = useMessages(conversationId);
+    const { messages, isLoading, isFetchingMore, hasMore, loadMore, sendMessage, markAsRead } = useMessages(conversationId);
     const { isConnected } = useWebSocketMessages(conversationId);
     const { closeConversation, registerSendCallback, openConversationManagement } = useNavigation();
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
+    const topHistorySentinelRef = useRef<HTMLDivElement>(null);
     const scrollEndRef = useRef<HTMLDivElement>(null);
+    const initialScrollDoneRef = useRef(false);
+    const shouldStickToBottomRef = useRef(true);
+    const pendingHistoryAnchorRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
+    const historyLoadInFlightRef = useRef(false);
+    const lastHistoryLoadAtRef = useRef(0);
+    const lastHistoryOldestUuidRef = useRef<string | null>(null);
+    const lastHistoryMessageCountRef = useRef(-1);
 
     const sendMutateRef = useRef(sendMessage.mutate);
     sendMutateRef.current = sendMessage.mutate;
@@ -249,14 +258,129 @@ export function ConversationThread({
     }, [conversationId, markAsRead]);
 
     useEffect(() => {
-        scrollEndRef.current?.scrollIntoView({ behavior: 'auto' });
-    }, [messages.length]);
+        initialScrollDoneRef.current = false;
+        shouldStickToBottomRef.current = true;
+        pendingHistoryAnchorRef.current = null;
+        historyLoadInFlightRef.current = false;
+        lastHistoryLoadAtRef.current = 0;
+        lastHistoryOldestUuidRef.current = null;
+        lastHistoryMessageCountRef.current = -1;
+    }, [conversationId]);
 
     const handleThreadSend = useCallback((text: string, parentUuid: string) => {
         sendMutateRef.current({ conversationId, content: text, parentMessageUuid: parentUuid });
     }, [conversationId]);
 
     const orderedMessages = useMemo(() => messages.slice().reverse(), [messages]);
+    const oldestRenderedMessageUuid = orderedMessages[0]?.uuid ?? null;
+
+    const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        container.scrollTo({ top: container.scrollHeight, behavior });
+    }, []);
+
+    const triggerLoadOlderMessages = useCallback((reason: 'nearTop') => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        if (!hasMore || isFetchingMore) return;
+        if (historyLoadInFlightRef.current) return;
+
+        const now = Date.now();
+        if (now - lastHistoryLoadAtRef.current < 500) return;
+
+        const currentMessageCount = orderedMessages.length;
+        const repeatedSameCursorWithoutProgress =
+            !!oldestRenderedMessageUuid &&
+            oldestRenderedMessageUuid === lastHistoryOldestUuidRef.current &&
+            currentMessageCount === lastHistoryMessageCountRef.current;
+        if (repeatedSameCursorWithoutProgress) return;
+
+        const repeatedSameCursorTooSoon =
+            !!oldestRenderedMessageUuid &&
+            oldestRenderedMessageUuid === lastHistoryOldestUuidRef.current &&
+            now - lastHistoryLoadAtRef.current < 1500;
+        if (repeatedSameCursorTooSoon) return;
+
+        pendingHistoryAnchorRef.current = {
+            scrollTop: container.scrollTop,
+            scrollHeight: container.scrollHeight,
+        };
+        historyLoadInFlightRef.current = true;
+        lastHistoryLoadAtRef.current = now;
+        lastHistoryOldestUuidRef.current = oldestRenderedMessageUuid;
+        lastHistoryMessageCountRef.current = currentMessageCount;
+
+        loadMore()
+            .catch((error) => {
+                console.warn('Failed to load older messages:', error);
+                pendingHistoryAnchorRef.current = null;
+                lastHistoryOldestUuidRef.current = null;
+                lastHistoryMessageCountRef.current = -1;
+            })
+            .finally(() => {
+                historyLoadInFlightRef.current = false;
+            });
+    }, [hasMore, isFetchingMore, loadMore, oldestRenderedMessageUuid, orderedMessages.length]);
+
+    const handleMessagesScroll = useCallback(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        shouldStickToBottomRef.current = distanceToBottom < 96;
+
+        if (container.scrollTop <= 120) {
+            triggerLoadOlderMessages('nearTop');
+        }
+    }, [triggerLoadOlderMessages]);
+
+    useLayoutEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        if (pendingHistoryAnchorRef.current) {
+            const { scrollHeight, scrollTop } = pendingHistoryAnchorRef.current;
+            const heightDelta = container.scrollHeight - scrollHeight;
+            container.scrollTop = scrollTop + Math.max(0, heightDelta);
+            pendingHistoryAnchorRef.current = null;
+            return;
+        }
+
+        if (!initialScrollDoneRef.current && orderedMessages.length > 0) {
+            scrollToBottom('auto');
+            initialScrollDoneRef.current = true;
+            shouldStickToBottomRef.current = true;
+            return;
+        }
+
+        if (shouldStickToBottomRef.current) {
+            scrollToBottom('auto');
+        }
+    }, [orderedMessages.length, scrollToBottom]);
+
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        const sentinel = topHistorySentinelRef.current;
+        if (!container || !sentinel) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const entry = entries[0];
+                if (entry?.isIntersecting) {
+                    triggerLoadOlderMessages('nearTop');
+                }
+            },
+            {
+                root: container,
+                threshold: 0.1,
+                rootMargin: '120px 0px 0px 0px',
+            }
+        );
+
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [triggerLoadOlderMessages]);
 
     const childrenByParent = useMemo(() => {
         const map = new Map<string, Message[]>();
@@ -317,11 +441,20 @@ export function ConversationThread({
             </div>
 
             {/* Messages area */}
-            <div className="thread-messages">
+            <div
+                ref={messagesContainerRef}
+                className="thread-messages"
+                onScroll={handleMessagesScroll}
+            >
+                <div ref={topHistorySentinelRef} className="thread-history-sentinel" aria-hidden="true" />
                 {isLoading && orderedMessages.length === 0 ? (
                     <div className="thread-loading">Chargement des messages...</div>
                 ) : (
-                    orderedMessages.map((msg, index, arr) => {
+                    <>
+                        {isFetchingMore && (
+                            <div className="thread-history-loading">Chargement de l&apos;historique...</div>
+                        )}
+                        {orderedMessages.map((msg, index, arr) => {
                         if (agentReplyUuids.has(msg.uuid)) return null;
 
                         // Skip reaction event messages (they're virtual, not displayed)
@@ -377,7 +510,8 @@ export function ConversationThread({
                                 onReact={handleReact}
                             />
                         );
-                    })
+                        })}
+                    </>
                 )}
                 <div ref={scrollEndRef} />
             </div>

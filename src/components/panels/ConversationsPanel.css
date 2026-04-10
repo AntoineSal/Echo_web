@@ -134,6 +134,11 @@
   background: rgba(10, 145, 104, 0.16);
 }
 
+.conv-square--agent-textual {
+  background: rgba(238, 240, 241, 0.98);
+  box-shadow: 0 3px 10px rgba(85, 98, 95, 0.08);
+}
+
 /* Full-bleed avatar */
 .conv-square__avatar {
   position: absolute;
@@ -156,6 +161,33 @@
   color: rgba(10, 145, 104, 0.8);
   background: rgba(10, 145, 104, 0.1);
   border-radius: inherit;
+}
+
+.conv-square__agent-name-fill {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 9px 12px;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.12)),
+    rgba(228, 231, 233, 0.72);
+}
+
+.conv-square__agent-name-fill-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-align: center;
+  text-wrap: balance;
+  line-height: 1.05;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: rgba(89, 102, 106, 0.96);
 }
 
 /* Unread count badge — top-right */
@@ -193,6 +225,18 @@
   box-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
 }
 
+.conv-square__name-badge--agent {
+  bottom: 6px;
+  left: 6px;
+  right: 6px;
+  padding: 4px 6px 5px;
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 12px;
+  opacity: 0.92;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
 .conv-square__name {
   display: block;
   font-size: 11px;
@@ -201,6 +245,19 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.conv-square__name--agent {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: initial;
+  line-height: 1.08;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 /* ── Loading / empty ── */

@@ -1,5 +1,5 @@
 .sidebar-resizer {
-    width: 6px;
+    width: 14px;
     cursor: col-resize;
     display: flex;
     align-items: center;
@@ -7,23 +7,37 @@
     flex-shrink: 0;
     z-index: 50;
     position: relative;
-    transition: background var(--transition-fast);
+    margin-left: -4px;
+    margin-right: -4px;
+    transition:
+        background var(--transition-fast),
+        transform var(--transition-fast);
 }
 
 .sidebar-resizer:hover {
-    background: rgba(10, 145, 104, 0.08);
+    background: linear-gradient(180deg, rgba(10, 145, 104, 0.05), rgba(10, 145, 104, 0.11));
 }
 
-.sidebar-resizer:hover .sidebar-resizer__handle {
+.sidebar-resizer:hover .sidebar-resizer__handle,
+.sidebar-resizer--active .sidebar-resizer__handle {
     opacity: 1;
     background: var(--echo-green);
+    box-shadow:
+        0 0 0 4px rgba(10, 145, 104, 0.08),
+        0 8px 20px rgba(10, 145, 104, 0.18);
+}
+
+.sidebar-resizer--active {
+    transform: scaleX(1.05);
 }
 
 .sidebar-resizer__handle {
-    width: 3px;
-    height: 40px;
-    border-radius: 2px;
-    background: rgba(0, 0, 0, 0.1);
-    opacity: 0.5;
-    transition: all var(--transition-fast);
+    width: 4px;
+    height: 64px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.18));
+    opacity: 0.55;
+    transition:
+        all var(--transition-fast),
+        box-shadow 180ms ease;
 }

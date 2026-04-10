@@ -29,7 +29,19 @@ export const EMERALD = {
 
 // Layout constants
 export const SIDEBAR_ICON_WIDTH = 60;
-export const SIDEBAR_PANEL_MIN_WIDTH = 240;
-export const SIDEBAR_PANEL_MAX_WIDTH = 500;
-export const SIDEBAR_PANEL_DEFAULT_WIDTH = 300;
+export const SIDEBAR_PANEL_GRID_ITEM_SIZE = 80;
+export const SIDEBAR_PANEL_GRID_GAP = 10;
+export const SIDEBAR_PANEL_GRID_GUTTER = 54;
+export const SIDEBAR_PANEL_SNAP_COLUMNS = [1, 2, 3, 4] as const;
+
+export const getSidebarPanelWidthForColumns = (columns: number) => (
+    SIDEBAR_PANEL_GRID_GUTTER +
+    (columns * SIDEBAR_PANEL_GRID_ITEM_SIZE) +
+    (Math.max(columns - 1, 0) * SIDEBAR_PANEL_GRID_GAP)
+);
+
+export const SIDEBAR_PANEL_SNAP_WIDTHS = SIDEBAR_PANEL_SNAP_COLUMNS.map(getSidebarPanelWidthForColumns);
+export const SIDEBAR_PANEL_MIN_WIDTH = SIDEBAR_PANEL_SNAP_WIDTHS[0];
+export const SIDEBAR_PANEL_MAX_WIDTH = SIDEBAR_PANEL_SNAP_WIDTHS[SIDEBAR_PANEL_SNAP_WIDTHS.length - 1];
+export const SIDEBAR_PANEL_DEFAULT_WIDTH = getSidebarPanelWidthForColumns(3);
 export const BOTTOM_BAR_HEIGHT = 52;

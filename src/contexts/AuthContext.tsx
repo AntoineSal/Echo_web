@@ -8,6 +8,8 @@ import { fetchWithAuth, setLogoutCallback } from '@mobile/services/apiClient';
 import { hasAcceptedCurrentCguLocally, markCurrentCguAcceptedLocally } from '@mobile/utils/cgu';
 import { cacheManager } from '../stubs/CacheManager';
 import { storage } from '@mobile/utils/storage';
+import { webDatabaseManager } from '../services/webDatabase';
+import { webLogger } from '../utils/logger';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 import type { User as ApiUser } from '@mobile/types/api';
@@ -116,6 +118,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         const initAuth = async () => {
             try {
+                webLogger.info('auth', 'Initializing web auth session');
                 setLogoutCallback(() => { performLogout(false); });
 
                 const [storedUser, storedAccess, storedRefresh] = await Promise.all([
@@ -126,8 +129,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
                 if (storedUser && storedAccess && storedRefresh) {
                     let resolvedUser = JSON.parse(storedUser) as User;
+                    await webDatabaseManager.initialize();
+                    await webDatabaseManager.logSnapshot();
                     setUser(resolvedUser);
                     setAccessToken(storedAccess);
+                    webLogger.info('auth', 'Restored stored session', {
+                        userUuid: resolvedUser?.uuid ?? null,
+                        username: resolvedUser?.username ?? null,
+                    });
 
                     // Self-heal: fetch profile if UUID missing
                     if (!resolvedUser?.uuid) {
@@ -141,17 +150,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                                     resolvedUser = fresh;
                                     setUser(fresh);
                                     await storage.setItemAsync('user', JSON.stringify(fresh));
+                                    webLogger.info('auth', 'Hydrated missing UUID from profile endpoint', {
+                                        userUuid: fresh.uuid,
+                                        username: fresh.username,
+                                    });
                                 }
                             }
                         } catch { /* best effort */ }
                     }
 
+                    if (resolvedUser?.uuid) {
+                        await webDatabaseManager.logSnapshot(resolvedUser.uuid);
+                    }
+
                     await refreshCguAcceptanceStatus(resolvedUser);
                 } else {
+                    webLogger.info('auth', 'No stored session found');
+                    await webDatabaseManager.initialize();
+                    await webDatabaseManager.logSnapshot();
                     setNeedsCguAcceptance(false);
                 }
             } catch (err) {
-                console.error('Auth init error:', err);
+                webLogger.error('auth', 'Auth init error', {
+                    error: err instanceof Error ? err.message : String(err),
+                });
             } finally {
                 setLoading(false);
             }
@@ -177,6 +199,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await storage.setItemAsync('accessToken', access);
         await storage.setItemAsync('refreshToken', refresh);
         await storage.setItemAsync('user', JSON.stringify(currentUser));
+        await webDatabaseManager.initialize();
+        await webDatabaseManager.logSnapshot();
+        await webDatabaseManager.logSnapshot(currentUser.uuid);
+        webLogger.info('auth', 'Applied authenticated session', {
+            userUuid: currentUser.uuid,
+            username: currentUser.username,
+        });
         setUser(currentUser);
         setAccessToken(access);
         await refreshCguAcceptanceStatus(currentUser);
@@ -188,6 +217,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isLoggingOutRef.current = true;
         try {
             const currentRefresh = await storage.getItemAsync('refreshToken');
+            webLogger.info('auth', 'Logging out', {
+                callApi,
+                userUuid: user?.uuid ?? null,
+            });
             if (callApi && currentRefresh) {
                 try {
                     await fetchWithAuth(`${API_BASE_URL}/api/auth/logout/`, {
@@ -199,6 +232,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
 
             await cacheManager.clear();
+            await webDatabaseManager.clearAllData();
             setUser(null);
             setAccessToken(null);
             setNeedsCguAcceptance(false);

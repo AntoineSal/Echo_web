@@ -35,13 +35,14 @@ interface SidebarProps {
     panelContent: React.ReactNode | null;
     panelWidth: number;
     isPanelOpen: boolean;
+    isResizing: boolean;
     userPhoto?: string | null;
     userName?: string;
     isLoggedIn: boolean;
     onLogout: () => void;
 }
 
-export default function Sidebar({ activePage, onNavigate, panelContent, panelWidth, isPanelOpen, userPhoto, userName, isLoggedIn, onLogout }: SidebarProps) {
+export default function Sidebar({ activePage, onNavigate, panelContent, panelWidth, isPanelOpen, isResizing, userPhoto, userName, isLoggedIn, onLogout }: SidebarProps) {
     const [hoveredItem, setHoveredItem] = useState<PageId | null>(null);
 
     const handleClick = useCallback((item: NavItem) => {
@@ -54,7 +55,7 @@ export default function Sidebar({ activePage, onNavigate, panelContent, panelWid
     return (
         <div className="sidebar">
             <div
-                className="sidebar__green-body"
+                className={`sidebar__green-body ${isPanelOpen ? 'sidebar__green-body--open' : ''} ${isResizing ? 'sidebar__green-body--resizing' : ''}`}
                 style={{ width: greenBodyWidth }}
             >
                 {/* Icon rail */}
@@ -118,10 +119,10 @@ export default function Sidebar({ activePage, onNavigate, panelContent, panelWid
 
                 {/* Panel inside the green body */}
                 <div
-                    className={`sidebar__panel ${isPanelOpen ? 'sidebar__panel--open' : ''}`}
+                    className={`sidebar__panel ${isPanelOpen ? 'sidebar__panel--open' : ''} ${isResizing ? 'sidebar__panel--resizing' : ''}`}
                     style={{ width: isPanelOpen ? panelWidth : 0 }}
                 >
-                    {isPanelOpen && (
+                    {panelContent && (
                         <div className="sidebar__panel-content">
                             {panelContent}
                         </div>

@@ -94,3 +94,10 @@ export const extractReactionMapFromMessages = (
 
   return { reactionByMessageUuid, reactionEventMessageUuids };
 };
+
+export const getConversationPreviewText = (content: string): string => {
+  const parsed = parseMessageReactionContent(content);
+  if (!parsed) return content;
+  if (parsed.emoji) return `a reagi ${parsed.emoji}`;
+  return 'a retire sa reaction';
+};

@@ -86,16 +86,22 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
               {filtered.map(conv => {
                 const isSelected = selectedConversation?.uuid === conv.uuid;
                 const hasUnread = conv.unread_count > 0;
+                const isAgentConversation = conv.conversation_type === 'agent';
+                const usesFullAgentNamePlaceholder = isAgentConversation && !conv.avatar_url;
 
                 return (
                   <button
                     key={conv.uuid}
-                    className={`conv-square ${hasUnread ? 'conv-square--unread' : ''} ${isSelected ? 'conv-square--selected' : ''}`}
+                    className={`conv-square ${hasUnread ? 'conv-square--unread' : ''} ${isSelected ? 'conv-square--selected' : ''} ${isAgentConversation ? 'conv-square--agent' : ''} ${usesFullAgentNamePlaceholder ? 'conv-square--agent-textual' : ''}`}
                     onClick={() => openConversation(conv)}
                     title={conv.name}
                   >
                     {conv.avatar_url ? (
                       <img src={conv.avatar_url} alt={conv.name} className="conv-square__avatar" />
+                    ) : usesFullAgentNamePlaceholder ? (
+                      <div className="conv-square__agent-name-fill">
+                        <span className="conv-square__agent-name-fill-text">{conv.name}</span>
+                      </div>
                     ) : (
                       <div className="conv-square__avatar-placeholder">
                         {conv.name.charAt(0).toUpperCase()}
@@ -108,9 +114,11 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
                       </span>
                     )}
 
-                    <div className="conv-square__name-badge">
-                      <span className="conv-square__name">{conv.name}</span>
-                    </div>
+                    {!usesFullAgentNamePlaceholder && (
+                      <div className={`conv-square__name-badge ${isAgentConversation ? 'conv-square__name-badge--agent' : ''}`}>
+                        <span className={`conv-square__name ${isAgentConversation ? 'conv-square__name--agent' : ''}`}>{conv.name}</span>
+                      </div>
+                    )}
                   </button>
                 );
               })}

@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './AuthContext';
 import { WS_BASE_URL } from '@mobile/config/api';
+import { webDatabaseManager } from '../services/webDatabase';
+import { webLogger } from '../utils/logger';
 
 interface WebSocketContextType {
     isConnected: boolean;
@@ -26,13 +28,18 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
 
         const wsUrl = `${WS_BASE_URL}/ws/chat/`;
-        console.log('[WS] Connecting to', wsUrl);
+        webLogger.info('ws', 'Connecting websocket', {
+            wsUrl,
+            userUuid: user.uuid,
+        });
 
         const ws = new WebSocket(wsUrl, ['access_token', accessToken]);
         wsRef.current = ws;
 
         ws.onopen = () => {
-            console.log('[WS] Connected');
+            webLogger.info('ws', 'Websocket connected', {
+                userUuid: user.uuid,
+            });
             setIsConnected(true);
             if (reconnectTimeoutRef.current) {
                 clearTimeout(reconnectTimeoutRef.current);
@@ -47,43 +54,42 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                 if (data.type === 'chat_message') {
                     const newMsg = data.message;
                     const convUuid = newMsg?.conversation_uuid;
-                    if (!convUuid) return;
+                    if (!convUuid || !user?.uuid) return;
 
-                    queryClient.setQueryData(['messages', convUuid], (oldData: any) => {
-                        if (!oldData?.pages) return oldData;
-
-                        const newPages = [...oldData.pages];
-                        const firstPage = { ...newPages[0], messages: [...newPages[0].messages] };
-
-                        const existingIdx = firstPage.messages.findIndex(
-                            (m: any) =>
-                                m.uuid === newMsg.uuid ||
-                                (m.isPending && m.content === newMsg.content && m.sender_uuid === newMsg.sender_uuid)
-                        );
-
-                        if (existingIdx >= 0) {
-                            firstPage.messages[existingIdx] = {
-                                ...firstPage.messages[existingIdx],
-                                ...newMsg,
-                                isPending: false,
-                            };
-                        } else {
-                            firstPage.messages = [newMsg, ...firstPage.messages];
-                        }
-
-                        newPages[0] = firstPage;
-                        return { ...oldData, pages: newPages };
+                    webLogger.info('ws', 'Received chat message event', {
+                        userUuid: user.uuid,
+                        conversationUuid: convUuid,
+                        messageUuid: String(newMsg?.uuid || ''),
                     });
 
-                    queryClient.invalidateQueries({ queryKey: ['conversations'] });
-                }
-            } catch (err) {
-                console.error('[WS] Parse error', err);
+                    void (async () => {
+                        try {
+                            await webDatabaseManager.upsertMessage(newMsg, user.uuid);
+                            await webDatabaseManager.updateConversationFromMessage(convUuid, user.uuid, newMsg);
+                        } catch (storageError) {
+                            webLogger.error('ws', 'Failed to persist incoming message locally', {
+                                userUuid: user.uuid,
+                                conversationUuid: convUuid,
+                                error: storageError instanceof Error ? storageError.message : String(storageError),
+                            });
+                        } finally {
+                            queryClient.invalidateQueries({ queryKey: ['messages', convUuid] });
+                            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                        }
+                    })();
+            }
+        } catch (err) {
+                webLogger.error('ws', 'Websocket payload parse error', {
+                    error: err instanceof Error ? err.message : String(err),
+                });
             }
         };
 
         ws.onclose = () => {
-            console.log('[WS] Closed — reconnecting in 3s');
+            webLogger.warn('ws', 'Websocket closed, scheduling reconnect', {
+                userUuid: user.uuid,
+                retryInMs: 3000,
+            });
             setIsConnected(false);
             if (wsRef.current === ws) {
                 reconnectTimeoutRef.current = window.setTimeout(connect, 3000);
@@ -91,7 +97,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         };
 
         ws.onerror = () => {
-            console.error('[WS] Error');
+            webLogger.error('ws', 'Websocket error', {
+                userUuid: user.uuid,
+            });
         };
     }, [user, accessToken, queryClient]);
 
@@ -110,6 +118,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     const sendWsMessage = useCallback((payload: object) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
+            webLogger.debug('ws', 'Sending websocket payload', { payload });
             wsRef.current.send(JSON.stringify(payload));
         }
     }, []);
