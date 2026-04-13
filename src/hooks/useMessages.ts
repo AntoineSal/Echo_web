@@ -287,7 +287,19 @@ export function useMessages(conversationId: string | null) {
             }
 
             const syncState = await webDatabaseManager.getSyncState(conversationId, user.uuid);
-            if (!syncState?.next_page_url) {
+            let targetUrl = syncState?.next_page_url;
+
+            // Self-healing: If the local cache was previously poisoned by the limit=50 bug,
+            // we dynamically fix the offset by counting local records.
+            if (targetUrl && targetUrl.includes('offset=50')) {
+                const totalLocal = await webDatabaseManager.getMessagesPage(conversationId, user.uuid, { limit: 99999 });
+                const localCount = totalLocal.messages.length;
+                if (localCount > 50) {
+                    targetUrl = targetUrl.replace('offset=50', `offset=${localCount}`);
+                }
+            }
+
+            if (!targetUrl) {
                 webLogger.info('messages', 'No local or remote older messages left', {
                     ownerUuid: user.uuid,
                     conversationUuid: conversationId,
@@ -298,9 +310,9 @@ export function useMessages(conversationId: string | null) {
             webLogger.warn('messages', 'Local history exhausted, switching to remote cursor', {
                 ownerUuid: user.uuid,
                 conversationUuid: conversationId,
-                nextPageUrl: syncState.next_page_url,
+                nextPageUrl: targetUrl,
             });
-            pageParam = { kind: 'remote', url: syncState.next_page_url };
+            pageParam = { kind: 'remote', url: targetUrl };
         }
 
         try {

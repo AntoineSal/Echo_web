@@ -30,9 +30,6 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
   const userPhoto = user?.photo_profil_url || user?.photo_profil || null;
   const userName = user?.username || user?.first_name || undefined;
 
-  // The sidebar is wider when we need more columns (like conversations)
-  const expandedWidth = 365;
-
   return (
     <div className="app-layout">
       <div className="app-layout__body">
@@ -40,7 +37,7 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
           activePage={currentPage}
           onNavigate={navigate}
           panelContent={isPanelOpen ? panelContent(currentPage) : null}
-          panelWidth={currentPage === 'conversations' ? expandedWidth : SIDEBAR_PANEL_DEFAULT_WIDTH}
+          panelWidth={SIDEBAR_PANEL_DEFAULT_WIDTH}
           isPanelOpen={isPanelOpen}
           isResizing={false}
           userPhoto={userPhoto}

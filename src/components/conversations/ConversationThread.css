@@ -124,11 +124,25 @@
 .thread-history-loading {
     align-self: center;
     margin: 4px 0 10px;
-    padding: 6px 12px;
+    padding: 6px 14px;
     border-radius: 999px;
     font-size: 12px;
-    color: rgba(6, 95, 70, 0.75);
-    background: rgba(10, 145, 104, 0.08);
+    font-weight: 500;
+    color: rgba(6, 95, 70, 0.85);
+    background: rgba(10, 145, 104, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.thread-history-spinner {
+    animation: rotate-spinner 1s linear infinite;
+}
+
+@keyframes rotate-spinner {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 /* ── System message ── */

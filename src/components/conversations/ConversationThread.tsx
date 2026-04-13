@@ -441,7 +441,10 @@ export function ConversationThread({
                 ) : (
                     <>
                         {isFetchingMore && (
-                            <div className="thread-history-loading">Chargement de l&apos;historique...</div>
+                            <div className="thread-history-loading">
+                                <IoSparkles className="thread-history-spinner" size={14} color="rgba(10, 145, 104, 0.8)" />
+                                Chargement de l&apos;historique...
+                            </div>
                         )}
                         {orderedMessages.map((msg, index, arr) => {
                         if (agentReplyUuids.has(msg.uuid)) return null;

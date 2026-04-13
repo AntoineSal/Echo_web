@@ -198,12 +198,20 @@ export async function syncLatestMessagesForConversation(
         }));
 
         await webDatabaseManager.upsertMessages(withConversationUuid, ownerUuid);
-        await webDatabaseManager.setSyncState(conversationUuid, ownerUuid, nextPageUrl);
+        
+        // Fix: Only update the pagination 'next_page_url' if this is effectively the first page
+        // of messages we've ever grabbed, otherwise we destroy the older history cursor!
+        const checkPage = await webDatabaseManager.getMessagesPage(conversationUuid, ownerUuid, { limit: pageLimit + 1 });
+        if (checkPage.messages.length <= pageLimit) {
+            await webDatabaseManager.setSyncState(conversationUuid, ownerUuid, nextPageUrl);
+        }
+        
         webLogger.info('sync', 'Completed latest messages sync', {
             ownerUuid,
             conversationUuid,
             count: withConversationUuid.length,
             nextPageUrl,
+            didOverwriteCursor: checkPage.messages.length <= pageLimit
         });
     })().finally(() => {
         latestMessagesSyncInFlight.delete(key);

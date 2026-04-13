@@ -4,7 +4,7 @@ import {
     IoChatbubblesOutline, IoChatbubbles,
     IoPeopleOutline, IoPeople,
     IoSparklesOutline, IoSparkles,
-    IoStorefrontOutline, IoStorefront,
+    IoExtensionPuzzleOutline, IoExtensionPuzzle,
     IoPersonOutline, IoPerson,
     IoLogOutOutline,
 } from 'react-icons/io5';
@@ -24,8 +24,8 @@ const NAV_ITEMS: NavItem[] = [
     { id: 'home', label: 'Accueil', icon: <IoHomeOutline size={22} />, iconActive: <IoHome size={22} />, hasPanel: false },
     { id: 'conversations', label: 'Conversations', icon: <IoChatbubblesOutline size={22} />, iconActive: <IoChatbubbles size={22} />, hasPanel: true },
     { id: 'groups', label: 'Groupes', icon: <IoPeopleOutline size={22} />, iconActive: <IoPeople size={22} />, hasPanel: true },
-    { id: 'agents', label: 'Agents', icon: <IoSparklesOutline size={22} />, iconActive: <IoSparkles size={22} />, hasPanel: true },
-    { id: 'marketplace', label: 'Marketplace', icon: <IoStorefrontOutline size={22} />, iconActive: <IoStorefront size={22} />, hasPanel: false },
+    { id: 'agents', label: 'Jarvis', icon: <IoSparklesOutline size={22} />, iconActive: <IoSparkles size={22} />, hasPanel: true },
+    { id: 'marketplace', label: 'Catalogue', icon: <IoExtensionPuzzleOutline size={22} />, iconActive: <IoExtensionPuzzle size={22} />, hasPanel: false },
     { id: 'profile', label: 'Profil', icon: <IoPersonOutline size={22} />, iconActive: <IoPerson size={22} />, hasPanel: false },
 ];
 
