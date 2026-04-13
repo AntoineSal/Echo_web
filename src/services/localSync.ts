@@ -14,6 +14,7 @@ type SyncMessagesResult = {
 
 const conversationSyncInFlight = new Map<string, Promise<void>>();
 const latestMessagesSyncInFlight = new Map<string, Promise<void>>();
+const incrementalMessagesSyncInFlight = new Map<string, Promise<number>>();
 
 function normalizePaginationUrl(nextUrl: string | null | undefined): string | null {
     if (!nextUrl) return null;
@@ -52,6 +53,30 @@ function normalizeConversationTypeForStore(type: ConversationListType): 'direct'
     if (type === 'group') return 'group';
     if (type === 'agent') return 'agent';
     return 'direct';
+}
+
+function toEpochMs(value: unknown): number {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number') {
+        return Number.isFinite(value)
+            ? (Math.abs(value) < 1_000_000_000_000 ? value * 1000 : value)
+            : 0;
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return 0;
+
+        const asNumber = Number(trimmed);
+        if (Number.isFinite(asNumber)) {
+            return Math.abs(asNumber) < 1_000_000_000_000 ? asNumber * 1000 : asNumber;
+        }
+
+        const parsed = Date.parse(trimmed);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    return 0;
 }
 
 function getConversationEndpoint(type: ConversationListType): string {
@@ -221,6 +246,114 @@ export async function syncLatestMessagesForConversation(
     return syncPromise;
 }
 
+export async function syncNewerMessagesForConversation(
+    ownerUuid: string,
+    conversationUuid: string,
+    options?: {
+        pageLimit?: number;
+        staleSinceMs?: number;
+        force?: boolean;
+    }
+): Promise<number> {
+    const pageLimit = options?.pageLimit ?? 100;
+    const staleSinceMs = options?.staleSinceMs ?? 10 * 60 * 1000;
+    const force = options?.force ?? false;
+    const key = `${ownerUuid}:${conversationUuid}`;
+
+    const existingSync = incrementalMessagesSyncInFlight.get(key);
+    if (existingSync) {
+        webLogger.debug('sync', 'Reusing in-flight incremental messages sync', {
+            ownerUuid,
+            conversationUuid,
+        });
+        return existingSync;
+    }
+
+    const syncPromise = (async () => {
+        await webDatabaseManager.initialize();
+
+        const localCount = await webDatabaseManager.getMessageCount(conversationUuid, ownerUuid);
+        const syncState = await webDatabaseManager.getSyncState(conversationUuid, ownerUuid);
+        const lastSyncedAt = syncState?.updated_at_ms ?? 0;
+        const newestLocalTimestamp = await webDatabaseManager.getNewestMessageTimestamp(conversationUuid, ownerUuid);
+        const isFreshEnough = !force && lastSyncedAt > 0 && (Date.now() - lastSyncedAt) < staleSinceMs;
+
+        if (localCount === 0 && !force) {
+            webLogger.debug('sync', 'Skipping incremental messages sync because local cache is empty', {
+                ownerUuid,
+                conversationUuid,
+            });
+            return 0;
+        }
+
+        if (isFreshEnough) {
+            webLogger.debug('sync', 'Skipping incremental messages sync because local cache is fresh', {
+                ownerUuid,
+                conversationUuid,
+                lastSyncedAt,
+                staleSinceMs,
+            });
+            return 0;
+        }
+
+        let url = `${API_BASE_URL}/messaging/conversations/${conversationUuid}/messages/?limit=${pageLimit}&ordering=-created_at`;
+        if (newestLocalTimestamp) {
+            const afterDate = new Date(newestLocalTimestamp + 1).toISOString();
+            url += `&created_after=${encodeURIComponent(afterDate)}&created_at__gt=${encodeURIComponent(afterDate)}`;
+        }
+
+        webLogger.info('sync', 'Starting incremental messages sync', {
+            ownerUuid,
+            conversationUuid,
+            url,
+            pageLimit,
+            newestLocalTimestamp,
+            localCount,
+        });
+
+        const { messages } = await fetchMessagesPage(url);
+        const knownMessageUuids = new Set(await webDatabaseManager.getMessageUuids(conversationUuid, ownerUuid));
+        const trulyNewMessages = messages
+            .filter((message) => {
+                const uuid = String(message.uuid || '');
+                if (!uuid || knownMessageUuids.has(uuid)) return false;
+                if (newestLocalTimestamp) {
+                    const createdAtMs = toEpochMs(message.created_at);
+                    if (createdAtMs <= newestLocalTimestamp) return false;
+                }
+                return true;
+            })
+            .map((message) => ({
+                conversation_uuid: conversationUuid,
+                ...message,
+            }));
+
+        if (trulyNewMessages.length > 0) {
+            await webDatabaseManager.upsertMessages(trulyNewMessages, ownerUuid);
+        }
+
+        await webDatabaseManager.setSyncState(
+            conversationUuid,
+            ownerUuid,
+            syncState?.next_page_url ?? null
+        );
+
+        webLogger.info('sync', 'Completed incremental messages sync', {
+            ownerUuid,
+            conversationUuid,
+            insertedCount: trulyNewMessages.length,
+            localCountBeforeSync: localCount,
+        });
+
+        return trulyNewMessages.length;
+    })().finally(() => {
+        incrementalMessagesSyncInFlight.delete(key);
+    });
+
+    incrementalMessagesSyncInFlight.set(key, syncPromise);
+    return syncPromise;
+}
+
 export async function fetchOlderMessagesPageAndPersist(
     ownerUuid: string,
     conversationUuid: string,
@@ -253,4 +386,100 @@ export async function fetchOlderMessagesPageAndPersist(
         messages: withConversationUuid,
         nextPageUrl,
     };
+}
+
+export async function fetchOlderMessagesPageByOffsetAndPersist(
+    ownerUuid: string,
+    conversationUuid: string,
+    offset: number,
+    pageLimit: number = 50
+): Promise<SyncMessagesResult> {
+    await webDatabaseManager.initialize();
+
+    const pageUrl = `${API_BASE_URL}/messaging/conversations/${conversationUuid}/messages/?limit=${pageLimit}&ordering=-created_at&offset=${Math.max(0, offset)}`;
+    webLogger.info('sync', 'Fetching older messages page via explicit offset fallback', {
+        ownerUuid,
+        conversationUuid,
+        pageUrl,
+        offset,
+        pageLimit,
+    });
+
+    const { messages, nextPageUrl } = await fetchMessagesPage(pageUrl);
+    const withConversationUuid = messages.map((message) => ({
+        conversation_uuid: conversationUuid,
+        ...message,
+    }));
+
+    await webDatabaseManager.upsertMessages(withConversationUuid, ownerUuid);
+
+    const computedNextPageUrl = nextPageUrl ?? (
+        withConversationUuid.length === pageLimit
+            ? `${API_BASE_URL}/messaging/conversations/${conversationUuid}/messages/?limit=${pageLimit}&ordering=-created_at&offset=${Math.max(0, offset) + withConversationUuid.length}`
+            : null
+    );
+
+    await webDatabaseManager.setSyncState(conversationUuid, ownerUuid, normalizePaginationUrl(computedNextPageUrl));
+
+    webLogger.info('sync', 'Persisted older messages page via explicit offset fallback', {
+        ownerUuid,
+        conversationUuid,
+        count: withConversationUuid.length,
+        nextPageUrl: normalizePaginationUrl(computedNextPageUrl),
+    });
+
+    return {
+        messages: withConversationUuid,
+        nextPageUrl: normalizePaginationUrl(computedNextPageUrl),
+    };
+}
+
+export async function hydrateConversationHistoryFromDetail(
+    ownerUuid: string,
+    conversationUuid: string
+): Promise<number> {
+    await webDatabaseManager.initialize();
+
+    const url = `${API_BASE_URL}/messaging/conversations/${conversationUuid}/`;
+    webLogger.info('sync', 'Hydrating conversation history from conversation detail endpoint', {
+        ownerUuid,
+        conversationUuid,
+        url,
+    });
+
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+        webLogger.error('sync', 'Conversation detail hydration failed', {
+            ownerUuid,
+            conversationUuid,
+            url,
+            status: response.status,
+        });
+        throw new Error(`Failed to hydrate conversation history: ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const rawMessages = Array.isArray((payload as Record<string, unknown>).messages)
+        ? ((payload as Record<string, unknown>).messages as Record<string, unknown>[])
+        : [];
+
+    const messages = rawMessages.map((message) => ({
+        conversation_uuid: conversationUuid,
+        ...message,
+    }));
+
+    if (messages.length > 0) {
+        await webDatabaseManager.upsertMessages(messages, ownerUuid);
+    }
+
+    // Persist an explicit sync_state row so future loads know history completeness was checked.
+    await webDatabaseManager.setSyncState(conversationUuid, ownerUuid, null);
+
+    webLogger.info('sync', 'Completed conversation detail hydration', {
+        ownerUuid,
+        conversationUuid,
+        count: messages.length,
+    });
+
+    return messages.length;
 }

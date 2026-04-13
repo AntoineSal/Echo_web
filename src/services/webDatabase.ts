@@ -528,7 +528,7 @@ export class WebDatabaseManager {
             if (record.created_at_ms > options.beforeCreatedAtMs) return false;
 
             if (!options.beforeUuid) return false;
-            return record.uuid < options.beforeUuid;
+            return record.uuid.localeCompare(options.beforeUuid) < 0;
         });
 
         const page = filtered.slice(0, options.limit);
@@ -548,6 +548,36 @@ export class WebDatabaseManager {
             messages: page.map((record) => record.raw),
             hasMoreLocal: filtered.length > options.limit,
         };
+    }
+
+    async getMessageCount(conversationUuid: string, ownerUuid: string): Promise<number> {
+        const records = await this.getAllByIndex<StoredMessageRecord>(
+            MESSAGES_STORE,
+            'owner_conversation',
+            [ownerUuid, conversationUuid]
+        );
+        return records.length;
+    }
+
+    async getNewestMessageTimestamp(conversationUuid: string, ownerUuid: string): Promise<number | null> {
+        const records = await this.getAllByIndex<StoredMessageRecord>(
+            MESSAGES_STORE,
+            'owner_conversation',
+            [ownerUuid, conversationUuid]
+        );
+        if (records.length === 0) return null;
+
+        const newest = records.sort(compareMessagesDescending)[0];
+        return newest?.created_at_ms ?? null;
+    }
+
+    async getMessageUuids(conversationUuid: string, ownerUuid: string): Promise<string[]> {
+        const records = await this.getAllByIndex<StoredMessageRecord>(
+            MESSAGES_STORE,
+            'owner_conversation',
+            [ownerUuid, conversationUuid]
+        );
+        return records.map((record) => record.uuid);
     }
 
     async updateMessageSyncStatus(

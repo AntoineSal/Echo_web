@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
 import { MessageContextMenu } from './MessageContextMenu';
+import { isFailedAssetUrl, markFailedAssetUrl } from '../../utils/failedAssetUrls';
+import { renderFormattedText } from './richText';
 import './MessageBubble.css';
 
 interface MessageBubbleProps {
@@ -43,6 +45,63 @@ function VideoAttachment({ url, thumbnailUrl }: { url: string; thumbnailUrl?: st
                 <source src={url} />
             </video>
         </div>
+    );
+}
+
+function buildAttachmentKey(messageUuid: string, attachment: NonNullable<Message['attachments']>[number], index: number): string {
+    return `${messageUuid}-${attachment.uuid || attachment.file_url || attachment.thumbnail_url || attachment.original_filename || 'attachment'}-${index}`;
+}
+
+function resolveAttachmentImageUrl(attachment: NonNullable<Message['attachments']>[number]): string {
+    const thumbnailUrl = attachment.thumbnail_url || '';
+    const fileUrl = attachment.file_url || '';
+
+    if (thumbnailUrl && !isFailedAssetUrl(thumbnailUrl)) {
+        return thumbnailUrl;
+    }
+
+    if (fileUrl && !isFailedAssetUrl(fileUrl)) {
+        return fileUrl;
+    }
+
+    return '';
+}
+
+function renderImageAttachment(attachment: NonNullable<Message['attachments']>[number]): React.ReactNode {
+    const initialImageUrl = resolveAttachmentImageUrl(attachment);
+    if (!initialImageUrl) {
+        return (
+            <a href={attachment.file_url} target="_blank" rel="noopener noreferrer" className="attachment-file">
+                📎 {attachment.original_filename || 'Image'}
+            </a>
+        );
+    }
+
+    return (
+        <img
+            src={initialImageUrl}
+            alt="Image"
+            className="attachment-image"
+            onError={(event) => {
+                const image = event.currentTarget;
+                markFailedAssetUrl(image.currentSrc || image.src);
+
+                if (
+                    attachment.thumbnail_url &&
+                    image.currentSrc !== attachment.file_url &&
+                    image.src !== attachment.file_url &&
+                    attachment.file_url &&
+                    !isFailedAssetUrl(attachment.file_url)
+                ) {
+                    image.src = attachment.file_url;
+                    return;
+                }
+
+                image.style.display = 'none';
+            }}
+            onClick={() => window.open(attachment.file_url, '_blank')}
+            style={{ cursor: 'pointer' }}
+        />
     );
 }
 
@@ -152,7 +211,7 @@ function InteractiveForm({ data, messageUuid, isMe }: {
 }
 
 // ── Main MessageBubble ────────────────────────────────────────────────────────
-export function MessageBubble({
+function MessageBubbleComponent({
     message,
     isFirstInGroup,
     isLastInGroup,
@@ -224,15 +283,14 @@ export function MessageBubble({
         hour: '2-digit', minute: '2-digit',
     });
 
-    const renderContent = (content: string) => {
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
-        return content.split(urlRegex).map((part, i) =>
-            part.match(urlRegex) ? (
-                <a key={i} href={part} target="_blank" rel="noopener noreferrer"
-                   className={isMe ? 'my-link-text' : 'their-link-text'}>{part}</a>
-            ) : part
-        );
-    };
+    const renderContent = (content: string) => renderFormattedText(content, `msg-${message.uuid}`, {
+        textClassName: isMe ? 'my-message-text' : 'their-message-text',
+        linkClassName: isMe ? 'my-link-text' : 'their-link-text',
+        inlineCodeClassName: isMe ? 'message-inline-code message-inline-code--mine' : 'message-inline-code message-inline-code--theirs',
+        codeBlockClassName: isMe ? 'message-code-block message-code-block--mine' : 'message-code-block message-code-block--theirs',
+        headingClassName: 'message-heading',
+        headingToneClassName: isMe ? 'message-heading--mine' : 'message-heading--theirs',
+    });
 
     const attachments = message.attachments ?? [];
     const isInteractive = message.interactive_data?.is_interactive === true
@@ -272,13 +330,10 @@ export function MessageBubble({
 
                         {attachments.length > 0 && (
                             <div className="attachment-stack">
-                                {attachments.map(att => (
-                                    <div key={att.uuid} className="attachment-item">
+                                {attachments.map((att, index) => (
+                                    <div key={buildAttachmentKey(message.uuid, att, index)} className="attachment-item">
                                         {att.file_type === 'image' ? (
-                                            <img src={att.thumbnail_url || att.file_url} alt="Image"
-                                                className="attachment-image"
-                                                onClick={() => window.open(att.file_url, '_blank')}
-                                                style={{ cursor: 'pointer' }} />
+                                            renderImageAttachment(att)
                                         ) : att.file_type === 'audio' ? (
                                             <AudioAttachment url={att.file_url} isMe={!!isMe} />
                                         ) : att.file_type === 'video' ? (
@@ -308,7 +363,7 @@ export function MessageBubble({
                         {reactionEmojis && reactionEmojis.length > 0 && (
                             <div className={`reaction-badges ${isMe ? 'reaction-badges--mine' : 'reaction-badges--theirs'}`}>
                                 {reactionEmojis.map((emoji, i) => (
-                                    <span key={i} className="reaction-badge">{emoji}</span>
+                                    <span key={`${message.uuid}-${emoji}-${i}`} className="reaction-badge">{emoji}</span>
                                 ))}
                             </div>
                         )}
@@ -346,3 +401,24 @@ export function MessageBubble({
         </>
     );
 }
+
+const areReactionListsEqual = (left?: string[], right?: string[]): boolean => {
+    if (left === right) return true;
+    if (!left || !right) return !left && !right;
+    if (left.length !== right.length) return false;
+    return left.every((item, index) => item === right[index]);
+};
+
+export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => {
+    return (
+        prev.message === next.message &&
+        prev.isFirstInGroup === next.isFirstInGroup &&
+        prev.isLastInGroup === next.isLastInGroup &&
+        prev.isSameSenderAsNext === next.isSameSenderAsNext &&
+        prev.isSameSenderAsPrev === next.isSameSenderAsPrev &&
+        prev.isGroupConversation === next.isGroupConversation &&
+        prev.replyParent?.uuid === next.replyParent?.uuid &&
+        prev.replyParent?.content === next.replyParent?.content &&
+        areReactionListsEqual(prev.reactionEmojis, next.reactionEmojis)
+    );
+});

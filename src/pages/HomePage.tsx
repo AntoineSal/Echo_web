@@ -15,6 +15,8 @@ import { useJarvis } from '../contexts/JarvisContext';
 import { useNavigation } from '../contexts/NavigationContext';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
+import { AgentContentRenderer } from '../components/conversations/AgentContentRenderer';
+import { renderFormattedText } from '../components/conversations/richText';
 import './HomePage.css';
 
 // Map suggestion icon names to actual components
@@ -246,13 +248,24 @@ export default function HomePage() {
                             </div>
                             <div className="home-page__jarvis-content">
                                 <div className="home-page__jarvis-user-msg">
-                                    <span className="home-page__jarvis-user-text">« {turn.userMessage} »</span>
+                                    <span className="home-page__jarvis-user-text">
+                                        « {renderFormattedText(turn.userMessage, `jarvis-user-${turn.id}`, {
+                                            textClassName: 'home-page__jarvis-user-text',
+                                            linkClassName: 'home-page__jarvis-user-link',
+                                            inlineCodeClassName: 'home-page__jarvis-inline-code home-page__jarvis-inline-code--user',
+                                            codeBlockClassName: 'home-page__jarvis-code-block home-page__jarvis-code-block--user',
+                                            headingClassName: 'home-page__jarvis-heading',
+                                            headingToneClassName: 'home-page__jarvis-heading--user',
+                                        })} »
+                                    </span>
                                 </div>
                                 <div className="home-page__jarvis-response">
                                     {turn.isProcessing ? (
                                         <span className="home-page__jarvis-processing">Jarvis réfléchit...</span>
                                     ) : (
-                                        <span className="home-page__jarvis-response-text">{turn.jarvisResponse}</span>
+                                        <div className="home-page__jarvis-response-text">
+                                            <AgentContentRenderer content={turn.jarvisResponse} />
+                                        </div>
                                     )}
                                 </div>
                             </div>

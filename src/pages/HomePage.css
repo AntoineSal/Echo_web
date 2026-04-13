@@ -325,6 +325,61 @@
     line-height: 1.4;
 }
 
+.home-page__jarvis-user-link {
+    color: #1f6f54;
+    text-decoration: underline;
+}
+
+.home-page__jarvis-inline-code,
+.home-page__jarvis-code-block {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    border-radius: 6px;
+}
+
+.home-page__jarvis-inline-code {
+    padding: 1px 5px;
+    font-size: 0.92em;
+}
+
+.home-page__jarvis-code-block {
+    display: inline-block;
+    white-space: pre-wrap;
+    padding: 8px 10px;
+    margin: 2px 0;
+    line-height: 1.45;
+}
+
+.home-page__jarvis-inline-code--user,
+.home-page__jarvis-code-block--user {
+    background: rgba(255, 255, 255, 0.24);
+    color: #24462c;
+}
+
+.home-page__jarvis-heading {
+    display: block;
+    line-height: 1.3;
+    margin: 2px 0;
+}
+
+.home-page__jarvis-heading--user {
+    color: #24462c;
+}
+
+.home-page__jarvis-heading--1 {
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.home-page__jarvis-heading--2 {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.home-page__jarvis-heading--3 {
+    font-size: 14px;
+    font-weight: 700;
+}
+
 .home-page__jarvis-response {
     margin-top: 4px;
 }
@@ -334,6 +389,21 @@
     color: var(--text-primary);
     line-height: 1.5;
     padding-right: 18px;
+}
+
+.home-page__jarvis-response-text .acr-root {
+    color: inherit;
+}
+
+.home-page__jarvis-response-text .acr-title,
+.home-page__jarvis-response-text .acr-subtitle,
+.home-page__jarvis-response-text .acr-heading-md {
+    color: #1c4f31;
+}
+
+.home-page__jarvis-response-text .acr-component-card,
+.home-page__jarvis-response-text .acr-component-unknown {
+    background: rgba(255, 255, 255, 0.72);
 }
 
 .home-page__jarvis-processing {

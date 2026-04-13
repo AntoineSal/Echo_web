@@ -1,13 +1,18 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
 import { webDatabaseManager } from '../services/webDatabase';
-import { fetchOlderMessagesPageAndPersist, syncLatestMessagesForConversation } from '../services/localSync';
+import { fetchOlderMessagesPageAndPersist, fetchOlderMessagesPageByOffsetAndPersist, hydrateConversationHistoryFromDetail, syncLatestMessagesForConversation, syncNewerMessagesForConversation } from '../services/localSync';
 import { webLogger } from '../utils/logger';
 
-const latestMessagesBackgroundSyncInFlight = new Map<string, Promise<void>>();
+type BackgroundMessageSyncResult = {
+    strategy: 'hydrate-latest' | 'incremental' | 'skip';
+    insertedCount: number;
+};
+
+const latestMessagesBackgroundSyncInFlight = new Map<string, Promise<BackgroundMessageSyncResult>>();
 const recentMarkAsReadKeys = new Map<string, number>();
 
 export interface Attachment {
@@ -91,7 +96,37 @@ interface MessagesPage {
 type MessagesCursor =
     | null
     | { kind: 'local'; beforeCreatedAtMs: number; beforeUuid: string }
+    | { kind: 'bootstrap-remote-history'; beforeCreatedAtMs: number; beforeUuid: string }
     | { kind: 'remote'; url: string };
+
+function parseCursorNumberParam(url: string, key: string): number | null {
+    try {
+        const parsed = new URL(url, window.location.origin);
+        const rawValue = parsed.searchParams.get(key);
+        if (rawValue === null) return null;
+
+        const value = Number(rawValue);
+        return Number.isFinite(value) ? value : null;
+    } catch {
+        return null;
+    }
+}
+
+function rebaseOffsetPaginationUrl(url: string, localCount: number): string {
+    try {
+        const parsed = new URL(url, window.location.origin);
+        const currentOffset = Number(parsed.searchParams.get('offset'));
+        if (!Number.isFinite(currentOffset)) return url;
+
+        const rebasedOffset = Math.max(currentOffset, localCount);
+        if (rebasedOffset === currentOffset) return normalizePaginationUrl(parsed.toString()) ?? url;
+
+        parsed.searchParams.set('offset', String(rebasedOffset));
+        return normalizePaginationUrl(parsed.toString()) ?? url;
+    } catch {
+        return url;
+    }
+}
 
 function normalizePaginationUrl(nextUrl: string | null | undefined): string | null {
     if (!nextUrl) return null;
@@ -147,6 +182,11 @@ async function fetchMessagesDirectly(url: string, conversationUuid: string): Pro
 export function useMessages(conversationId: string | null) {
     const { user } = useAuth();
     const queryClient = useQueryClient();
+    const historyBootstrapAttemptedRef = useRef(false);
+
+    useEffect(() => {
+        historyBootstrapAttemptedRef.current = false;
+    }, [conversationId]);
 
     const buildNextCursor = async (
         ownerUuid: string,
@@ -171,11 +211,32 @@ export function useMessages(conversationId: string | null) {
             return cursor;
         }
 
+        const oldestMessage = pageMessages[pageMessages.length - 1];
         const syncState = await webDatabaseManager.getSyncState(conversationId!, ownerUuid);
-        const cursor: MessagesCursor = syncState?.next_page_url ? { kind: 'remote', url: syncState.next_page_url } : null;
+        const shouldAttemptBootstrapHistory =
+            !!oldestMessage &&
+            !historyBootstrapAttemptedRef.current &&
+            (
+                !syncState ||
+                (!syncState.next_page_url && pageMessages.length >= 50)
+            );
+
+        const cursor: MessagesCursor = shouldAttemptBootstrapHistory
+            ? {
+                kind: 'bootstrap-remote-history',
+                beforeCreatedAtMs: typeof oldestMessage.created_at === 'number'
+                    ? oldestMessage.created_at
+                    : Date.parse(String(oldestMessage.created_at)) || 0,
+                beforeUuid: oldestMessage.uuid,
+            }
+            : (syncState?.next_page_url ? { kind: 'remote', url: syncState.next_page_url } : null);
         webLogger.debug('messages', 'Built next remote cursor', {
             ownerUuid,
             conversationUuid: conversationId,
+            pageCount: pageMessages.length,
+            shouldAttemptBootstrapHistory,
+            historyBootstrapAttempted: historyBootstrapAttemptedRef.current,
+            cursorKind: cursor && typeof cursor === 'object' && 'kind' in cursor ? cursor.kind : null,
             nextPageUrl: syncState?.next_page_url ?? null,
         });
         return cursor;
@@ -289,13 +350,20 @@ export function useMessages(conversationId: string | null) {
             const syncState = await webDatabaseManager.getSyncState(conversationId, user.uuid);
             let targetUrl = syncState?.next_page_url;
 
-            // Self-healing: If the local cache was previously poisoned by the limit=50 bug,
-            // we dynamically fix the offset by counting local records.
-            if (targetUrl && targetUrl.includes('offset=50')) {
-                const totalLocal = await webDatabaseManager.getMessagesPage(conversationId, user.uuid, { limit: 99999 });
-                const localCount = totalLocal.messages.length;
-                if (localCount > 50) {
-                    targetUrl = targetUrl.replace('offset=50', `offset=${localCount}`);
+            if (targetUrl) {
+                const localCount = await webDatabaseManager.getMessageCount(conversationId, user.uuid);
+                const remoteOffset = parseCursorNumberParam(targetUrl, 'offset');
+                const rebasedTargetUrl = rebaseOffsetPaginationUrl(targetUrl, localCount);
+
+                if (rebasedTargetUrl !== targetUrl) {
+                    webLogger.warn('messages', 'Rebased stale remote history cursor to local cache size', {
+                        ownerUuid: user.uuid,
+                        conversationUuid: conversationId,
+                        localCount,
+                        previousOffset: remoteOffset,
+                        rebasedOffset: parseCursorNumberParam(rebasedTargetUrl, 'offset'),
+                    });
+                    targetUrl = rebasedTargetUrl;
                 }
             }
 
@@ -316,25 +384,136 @@ export function useMessages(conversationId: string | null) {
         }
 
         try {
-            const remotePage = await fetchOlderMessagesPageAndPersist(user.uuid, conversationId, pageParam.url);
-            const messages = remotePage.messages as unknown as Message[];
-            webLogger.info('messages', 'Loaded older page after remote fetch and local persistence', {
-                ownerUuid: user.uuid,
-                conversationUuid: conversationId,
-                count: messages.length,
-                nextPageUrl: remotePage.nextPageUrl,
-            });
-            return {
-                messages,
-                nextCursor: remotePage.nextPageUrl ? { kind: 'remote', url: remotePage.nextPageUrl } : null,
-            };
+            if (pageParam.kind === 'bootstrap-remote-history') {
+                historyBootstrapAttemptedRef.current = true;
+                const localCount = await webDatabaseManager.getMessageCount(conversationId, user.uuid);
+                const knownMessageUuids = new Set(await webDatabaseManager.getMessageUuids(conversationId, user.uuid));
+
+                if (localCount > 0) {
+                    const offsetPage = await fetchOlderMessagesPageByOffsetAndPersist(
+                        user.uuid,
+                        conversationId,
+                        localCount,
+                        50
+                    );
+                    const offsetMessages = offsetPage.messages as unknown as Message[];
+                    const newUniqueMessages = offsetMessages.filter((message) => {
+                        const messageUuid = String(message.uuid || '');
+                        return !!messageUuid && !knownMessageUuids.has(messageUuid);
+                    });
+
+                    if (newUniqueMessages.length > 0) {
+                        const localPage = await webDatabaseManager.getMessagesPage(conversationId, user.uuid, {
+                            limit: 50,
+                            beforeCreatedAtMs: pageParam.beforeCreatedAtMs,
+                            beforeUuid: pageParam.beforeUuid,
+                        });
+                        const messages = localPage.messages as unknown as Message[];
+                        webLogger.info('messages', 'Loaded older page after explicit offset fallback', {
+                            ownerUuid: user.uuid,
+                            conversationUuid: conversationId,
+                            localCount,
+                            offsetFetchedCount: offsetMessages.length,
+                            newUniqueCount: newUniqueMessages.length,
+                            count: messages.length,
+                            hasMoreLocal: localPage.hasMoreLocal,
+                        });
+                        return {
+                            messages,
+                            nextCursor: await buildNextCursor(user.uuid, messages, localPage.hasMoreLocal),
+                        };
+                    }
+                }
+
+                const hydratedCount = await hydrateConversationHistoryFromDetail(user.uuid, conversationId);
+                const localPage = await webDatabaseManager.getMessagesPage(conversationId, user.uuid, {
+                    limit: 50,
+                    beforeCreatedAtMs: pageParam.beforeCreatedAtMs,
+                    beforeUuid: pageParam.beforeUuid,
+                });
+
+                const messages = localPage.messages as unknown as Message[];
+                webLogger.info('messages', 'Loaded older page after conversation detail hydration', {
+                    ownerUuid: user.uuid,
+                    conversationUuid: conversationId,
+                    hydratedCount,
+                    count: messages.length,
+                    hasMoreLocal: localPage.hasMoreLocal,
+                });
+                return {
+                    messages,
+                    nextCursor: await buildNextCursor(user.uuid, messages, localPage.hasMoreLocal),
+                };
+            }
+
+            const knownMessageUuids = new Set(await webDatabaseManager.getMessageUuids(conversationId, user.uuid));
+            let currentRemoteUrl = pageParam.url;
+            let duplicateOnlyPageCount = 0;
+            const maxDuplicateOnlyPages = 10;
+
+            while (true) {
+                const remotePage = await fetchOlderMessagesPageAndPersist(user.uuid, conversationId, currentRemoteUrl);
+                const messages = remotePage.messages as unknown as Message[];
+                const newUniqueMessages = messages.filter((message) => {
+                    const messageUuid = String(message.uuid || '');
+                    if (!messageUuid || knownMessageUuids.has(messageUuid)) return false;
+                    knownMessageUuids.add(messageUuid);
+                    return true;
+                });
+
+                if (newUniqueMessages.length > 0 || !remotePage.nextPageUrl) {
+                    webLogger.info('messages', 'Loaded older page after remote fetch and local persistence', {
+                        ownerUuid: user.uuid,
+                        conversationUuid: conversationId,
+                        count: messages.length,
+                        newUniqueCount: newUniqueMessages.length,
+                        duplicateOnlyPageCount,
+                        nextPageUrl: remotePage.nextPageUrl,
+                    });
+                    return {
+                        messages: newUniqueMessages.length > 0 ? messages : [],
+                        nextCursor: remotePage.nextPageUrl ? { kind: 'remote', url: remotePage.nextPageUrl } : null,
+                    };
+                }
+
+                duplicateOnlyPageCount += 1;
+                if (!remotePage.nextPageUrl || remotePage.nextPageUrl === currentRemoteUrl || duplicateOnlyPageCount >= maxDuplicateOnlyPages) {
+                    webLogger.warn('messages', 'Stopping duplicate-only remote history advance loop', {
+                        ownerUuid: user.uuid,
+                        conversationUuid: conversationId,
+                        pageUrl: currentRemoteUrl,
+                        nextPageUrl: remotePage.nextPageUrl,
+                        duplicateOnlyPageCount,
+                        maxDuplicateOnlyPages,
+                    });
+                    return {
+                        messages: [],
+                        nextCursor: remotePage.nextPageUrl && remotePage.nextPageUrl !== currentRemoteUrl
+                            ? { kind: 'remote', url: remotePage.nextPageUrl }
+                            : null,
+                    };
+                }
+
+                webLogger.warn('messages', 'Remote history page contained only cached messages, advancing cursor', {
+                    ownerUuid: user.uuid,
+                    conversationUuid: conversationId,
+                    pageUrl: currentRemoteUrl,
+                    nextPageUrl: remotePage.nextPageUrl,
+                    duplicateOnlyPageCount,
+                });
+                currentRemoteUrl = remotePage.nextPageUrl;
+            }
         } catch (remotePersistError) {
             webLogger.error('messages', 'Failed to persist older messages locally, falling back to direct API payload', {
                 ownerUuid: user.uuid,
                 conversationUuid: conversationId,
-                pageUrl: pageParam.url,
+                pageUrl: pageParam.kind === 'remote' ? pageParam.url : null,
                 error: remotePersistError instanceof Error ? remotePersistError.message : String(remotePersistError),
             });
+            if (pageParam.kind !== 'remote') {
+                throw remotePersistError;
+            }
+
             const directPage = await fetchMessagesDirectly(pageParam.url, conversationId);
             return {
                 messages: directPage.messages,
@@ -349,6 +528,7 @@ export function useMessages(conversationId: string | null) {
         initialPageParam: null as MessagesCursor,
         getNextPageParam: (lastPage) => lastPage.nextCursor,
         enabled: !!conversationId && !!user,
+        placeholderData: (previousData) => previousData,
         staleTime: Infinity,
         refetchOnWindowFocus: false,
     });
@@ -360,7 +540,27 @@ export function useMessages(conversationId: string | null) {
 
         const syncKey = `${user.uuid}:${conversationId}`;
         const existingSync = latestMessagesBackgroundSyncInFlight.get(syncKey);
-        const syncPromise = existingSync ?? syncLatestMessagesForConversation(user.uuid, conversationId);
+        const syncPromise = existingSync ?? (async (): Promise<BackgroundMessageSyncResult> => {
+            await webDatabaseManager.initialize();
+            const localCount = await webDatabaseManager.getMessageCount(conversationId, user.uuid);
+
+            if (localCount === 0) {
+                await syncLatestMessagesForConversation(user.uuid, conversationId);
+                return {
+                    strategy: 'hydrate-latest',
+                    insertedCount: 0,
+                };
+            }
+
+            const insertedCount = await syncNewerMessagesForConversation(user.uuid, conversationId, {
+                staleSinceMs: 10 * 60 * 1000,
+            });
+
+            return {
+                strategy: insertedCount > 0 ? 'incremental' : 'skip',
+                insertedCount,
+            };
+        })();
 
         if (!existingSync) {
             latestMessagesBackgroundSyncInFlight.set(syncKey, syncPromise);
@@ -372,11 +572,35 @@ export function useMessages(conversationId: string | null) {
         }
 
         void syncPromise
-            .then(() => {
+            .then((result) => {
                 if (!cancelled) {
-                    webLogger.debug('messages', 'Invalidating messages query after background latest sync', {
+                    if (result.strategy === 'skip') {
+                        webLogger.debug('messages', 'Skipping messages query invalidation after background sync because local cache is fresh', {
+                            ownerUuid: user.uuid,
+                            conversationUuid: conversationId,
+                        });
+                        return;
+                    }
+
+                    const existingData = queryClient.getQueryData<InfiniteData<MessagesPage>>(['messages', conversationId]);
+                    const pageCount = existingData?.pages.length ?? 0;
+                    if (pageCount > 1) {
+                        webLogger.debug('messages', 'Skipping messages query invalidation after background sync because history is already paginated', {
+                            ownerUuid: user.uuid,
+                            conversationUuid: conversationId,
+                            pageCount,
+                            strategy: result.strategy,
+                            insertedCount: result.insertedCount,
+                        });
+                        return;
+                    }
+
+                    webLogger.debug('messages', 'Invalidating messages query after background sync', {
                         ownerUuid: user.uuid,
                         conversationUuid: conversationId,
+                        pageCount,
+                        strategy: result.strategy,
+                        insertedCount: result.insertedCount,
                     });
                     queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
                 }

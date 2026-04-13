@@ -5,6 +5,7 @@ import { useNavigation } from '../../contexts/NavigationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { MessageBubble } from './MessageBubble';
 import { AgentContentRenderer } from './AgentContentRenderer';
+import { normalizeAgentRenderPayload, normalizeRawAgentContentText } from '../../utils/agentRenderPayload';
 import { buildMessageReactionContent, extractReactionMapFromMessages, isReactionEventMessage } from '../../utils/messageReactions';
 import { IoChevronBack, IoChevronDown, IoChevronUp, IoChatbubbleOutline, IoSend, IoSparkles } from 'react-icons/io5';
 import './ConversationThread.css';
@@ -42,16 +43,20 @@ function resolveAgentName(msg: Message): string {
 /** Extract first non-empty text line for collapsed preview */
 function getContentPreview(content: string): string {
     if (!content?.trim()) return '';
-    try {
-        const parsed = JSON.parse(content);
-        if (parsed?.mode === 'structured' && parsed?.data?.nodes) {
-            for (const node of parsed.data.nodes) {
-                if (node.text?.trim()) return node.text.trim();
-            }
+    const cleaned = normalizeRawAgentContentText(content);
+    const parsed = normalizeAgentRenderPayload(content, cleaned);
+    if (parsed?.mode === 'structured' && parsed?.data && typeof parsed.data === 'object' && parsed.data !== null) {
+        const data = parsed.data as { nodes?: Array<Record<string, unknown>>; blocks?: Array<Record<string, unknown>> };
+        const nodes = Array.isArray(data.nodes) ? data.nodes : (Array.isArray(data.blocks) ? data.blocks : []);
+        for (const node of nodes) {
+            const text = typeof node.text === 'string' ? node.text.trim() : '';
+            if (text) return text;
+            const title = typeof node.title === 'string' ? node.title.trim() : '';
+            if (title) return title;
         }
-        if (parsed?.fallback_text) return parsed.fallback_text;
-        if (parsed?.text) return parsed.text;
-    } catch { /* plain text */ }
+        if (parsed.fallback_text) return parsed.fallback_text;
+    }
+    if (parsed?.mode === 'text' && parsed.text) return parsed.text;
     const firstLine = content.split('\n').find(l => l.trim());
     return firstLine?.trim() ?? '';
 }
@@ -162,7 +167,7 @@ function AgentCard({ msg, threadMessages, conversationId, isAutoExpanded, onThre
                                             <span className="agent-card__thread-sender">{tmsg.sender_username}</span>
                                         )}
                                         <div className={`agent-card__thread-bubble ${isAgentMsg ? 'agent-card__thread-bubble--agent' : isMe ? 'agent-card__thread-bubble--mine' : 'agent-card__thread-bubble--theirs'}`}>
-                                            <span>{tmsg.content}</span>
+                                            <AgentContentRenderer content={tmsg.content} fallbackSuffix={tmsg.isPending ? ' ⏳' : ''} />
                                             <span className="agent-card__thread-time">{tTime}</span>
                                         </div>
                                     </div>
@@ -196,11 +201,14 @@ export function ConversationThread({
     const scrollEndRef = useRef<HTMLDivElement>(null);
     const initialScrollDoneRef = useRef(false);
     const shouldStickToBottomRef = useRef(true);
-    const pendingHistoryAnchorRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
+    const pendingHistoryAnchorRef = useRef<{ anchorUuid: string; offsetTop: number } | null>(null);
+    const postHistoryResizeAnchorRef = useRef<{ anchorUuid: string; offsetTop: number; expiresAt: number } | null>(null);
     const historyLoadInFlightRef = useRef(false);
+    const historyTopTriggerArmedRef = useRef(true);
     const lastHistoryLoadAtRef = useRef(0);
     const lastHistoryOldestUuidRef = useRef<string | null>(null);
     const lastHistoryMessageCountRef = useRef(-1);
+    const messageElementByUuidRef = useRef(new Map<string, HTMLDivElement>());
 
     const sendMutateRef = useRef(sendMessage.mutate);
     sendMutateRef.current = sendMessage.mutate;
@@ -239,7 +247,9 @@ export function ConversationThread({
         initialScrollDoneRef.current = false;
         shouldStickToBottomRef.current = true;
         pendingHistoryAnchorRef.current = null;
+        postHistoryResizeAnchorRef.current = null;
         historyLoadInFlightRef.current = false;
+        historyTopTriggerArmedRef.current = true;
         lastHistoryLoadAtRef.current = 0;
         lastHistoryOldestUuidRef.current = null;
         lastHistoryMessageCountRef.current = -1;
@@ -258,11 +268,37 @@ export function ConversationThread({
         container.scrollTo({ top: container.scrollHeight, behavior });
     }, []);
 
+    const captureVisibleAnchor = useCallback((): { anchorUuid: string; offsetTop: number } | null => {
+        const container = messagesContainerRef.current;
+        if (!container) return null;
+
+        const containerRect = container.getBoundingClientRect();
+        let best: { anchorUuid: string; offsetTop: number } | null = null;
+
+        for (const message of orderedMessages) {
+            const element = messageElementByUuidRef.current.get(message.uuid);
+            if (!element) continue;
+
+            const rect = element.getBoundingClientRect();
+            if (rect.bottom <= containerRect.top) continue;
+            if (rect.top >= containerRect.bottom) continue;
+
+            best = {
+                anchorUuid: message.uuid,
+                offsetTop: rect.top - containerRect.top,
+            };
+            break;
+        }
+
+        return best;
+    }, [orderedMessages]);
+
     const triggerLoadOlderMessages = useCallback((reason: 'nearTop') => {
         const container = messagesContainerRef.current;
         if (!container) return;
         if (!hasMore || isFetchingMore) return;
         if (historyLoadInFlightRef.current) return;
+        if (!historyTopTriggerArmedRef.current) return;
 
         const now = Date.now();
         if (now - lastHistoryLoadAtRef.current < 500) return;
@@ -280,11 +316,9 @@ export function ConversationThread({
             now - lastHistoryLoadAtRef.current < 1500;
         if (repeatedSameCursorTooSoon) return;
 
-        pendingHistoryAnchorRef.current = {
-            scrollTop: container.scrollTop,
-            scrollHeight: container.scrollHeight,
-        };
+        pendingHistoryAnchorRef.current = captureVisibleAnchor();
         historyLoadInFlightRef.current = true;
+        historyTopTriggerArmedRef.current = false;
         lastHistoryLoadAtRef.current = now;
         lastHistoryOldestUuidRef.current = oldestRenderedMessageUuid;
         lastHistoryMessageCountRef.current = currentMessageCount;
@@ -293,13 +327,27 @@ export function ConversationThread({
             .catch((error) => {
                 console.warn('Failed to load older messages:', error);
                 pendingHistoryAnchorRef.current = null;
+                historyTopTriggerArmedRef.current = true;
                 lastHistoryOldestUuidRef.current = null;
                 lastHistoryMessageCountRef.current = -1;
             })
             .finally(() => {
                 historyLoadInFlightRef.current = false;
             });
-    }, [hasMore, isFetchingMore, loadMore, oldestRenderedMessageUuid, orderedMessages.length]);
+    }, [captureVisibleAnchor, hasMore, isFetchingMore, loadMore, oldestRenderedMessageUuid, orderedMessages.length]);
+
+    const maybeLoadOlderMessages = useCallback(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        if (!hasMore || isFetchingMore) return;
+
+        const isNearTop = container.scrollTop <= 120;
+        const doesNotOverflowEnough = container.scrollHeight <= container.clientHeight + 160;
+
+        if (isNearTop || doesNotOverflowEnough) {
+            triggerLoadOlderMessages('nearTop');
+        }
+    }, [hasMore, isFetchingMore, triggerLoadOlderMessages]);
 
     const handleMessagesScroll = useCallback(() => {
         const container = messagesContainerRef.current;
@@ -307,6 +355,10 @@ export function ConversationThread({
 
         const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
         shouldStickToBottomRef.current = distanceToBottom < 96;
+
+        if (container.scrollTop > 220) {
+            historyTopTriggerArmedRef.current = true;
+        }
 
         if (container.scrollTop <= 120) {
             triggerLoadOlderMessages('nearTop');
@@ -318,10 +370,20 @@ export function ConversationThread({
         if (!container) return;
 
         if (pendingHistoryAnchorRef.current) {
-            const { scrollHeight, scrollTop } = pendingHistoryAnchorRef.current;
-            const heightDelta = container.scrollHeight - scrollHeight;
-            container.scrollTop = scrollTop + Math.max(0, heightDelta);
+            const { anchorUuid, offsetTop } = pendingHistoryAnchorRef.current;
+            const anchorElement = messageElementByUuidRef.current.get(anchorUuid);
+            if (anchorElement) {
+                const containerRect = container.getBoundingClientRect();
+                const rect = anchorElement.getBoundingClientRect();
+                container.scrollTop += (rect.top - containerRect.top) - offsetTop;
+            }
             pendingHistoryAnchorRef.current = null;
+            postHistoryResizeAnchorRef.current = {
+                anchorUuid,
+                offsetTop,
+                expiresAt: Date.now() + 1800,
+            };
+            historyTopTriggerArmedRef.current = true;
             return;
         }
 
@@ -336,6 +398,14 @@ export function ConversationThread({
             scrollToBottom('auto');
         }
     }, [orderedMessages.length, scrollToBottom]);
+
+    useEffect(() => {
+        const frame = window.requestAnimationFrame(() => {
+            maybeLoadOlderMessages();
+        });
+
+        return () => window.cancelAnimationFrame(frame);
+    }, [maybeLoadOlderMessages, orderedMessages.length]);
 
     useEffect(() => {
         const container = messagesContainerRef.current;
@@ -359,6 +429,47 @@ export function ConversationThread({
         observer.observe(sentinel);
         return () => observer.disconnect();
     }, [triggerLoadOlderMessages]);
+
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container || typeof ResizeObserver === 'undefined') return;
+
+        const observer = new ResizeObserver(() => {
+            const anchor = postHistoryResizeAnchorRef.current;
+            if (!anchor) return;
+
+            if (Date.now() > anchor.expiresAt) {
+                postHistoryResizeAnchorRef.current = null;
+                return;
+            }
+
+            const anchorElement = messageElementByUuidRef.current.get(anchor.anchorUuid);
+            if (!anchorElement) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const rect = anchorElement.getBoundingClientRect();
+            const delta = (rect.top - containerRect.top) - anchor.offsetTop;
+            if (delta === 0) return;
+
+            container.scrollTop += delta;
+            postHistoryResizeAnchorRef.current = {
+                anchorUuid: anchor.anchorUuid,
+                offsetTop: anchor.offsetTop,
+                expiresAt: anchor.expiresAt,
+            };
+        });
+
+        observer.observe(container);
+        return () => observer.disconnect();
+    }, []);
+
+    const registerMessageElement = useCallback((uuid: string, element: HTMLDivElement | null) => {
+        if (element) {
+            messageElementByUuidRef.current.set(uuid, element);
+            return;
+        }
+        messageElementByUuidRef.current.delete(uuid);
+    }, []);
 
     const childrenByParent = useMemo(() => {
         const map = new Map<string, Message[]>();
@@ -456,23 +567,26 @@ export function ConversationThread({
                         if (isAgentMessage(msg)) {
                             const threadMessages = childrenByParent.get(msg.uuid) || [];
                             return (
-                                <AgentCard
-                                    key={msg.uuid}
-                                    msg={msg}
-                                    threadMessages={threadMessages}
-                                    conversationId={conversationId}
-                                    isAutoExpanded={isAgentConversation}
-                                    onThreadSend={handleThreadSend}
-                                    conversationAvatar={conversationAvatar}
-                                />
+                                <div key={msg.uuid} ref={(element) => registerMessageElement(msg.uuid, element)} className="thread-message-item">
+                                    <AgentCard
+                                        msg={msg}
+                                        threadMessages={threadMessages}
+                                        conversationId={conversationId}
+                                        isAutoExpanded={isAgentConversation}
+                                        onThreadSend={handleThreadSend}
+                                        conversationAvatar={conversationAvatar}
+                                    />
+                                </div>
                             );
                         }
 
                         // System message
                         if (msg.message_type === 'system') {
                             return (
-                                <div key={msg.uuid} className="system-message-container">
-                                    <span className="system-message-text">{msg.content}</span>
+                                <div key={msg.uuid} ref={(element) => registerMessageElement(msg.uuid, element)} className="thread-message-item">
+                                    <div className="system-message-container">
+                                        <span className="system-message-text">{msg.content}</span>
+                                    </div>
                                 </div>
                             );
                         }
@@ -494,19 +608,20 @@ export function ConversationThread({
                             : null;
 
                         return (
-                            <MessageBubble
-                                key={msg.uuid || msg.id}
-                                message={msg}
-                                isFirstInGroup={!sameSender(prevNormal, msg)}
-                                isLastInGroup={!sameSender(nextNormal, msg)}
-                                isSameSenderAsNext={sameSender(nextNormal, msg)}
-                                isSameSenderAsPrev={sameSender(prevNormal, msg)}
-                                isGroupConversation={isGroupConversation}
-                                reactionEmojis={reactionByMessageUuid[msg.uuid] || []}
-                                replyParent={replyParent}
-                                onReact={handleReact}
-                                onReply={handleReply}
-                            />
+                            <div key={msg.uuid || msg.id} ref={(element) => registerMessageElement(msg.uuid, element)} className="thread-message-item">
+                                <MessageBubble
+                                    message={msg}
+                                    isFirstInGroup={!sameSender(prevNormal, msg)}
+                                    isLastInGroup={!sameSender(nextNormal, msg)}
+                                    isSameSenderAsNext={sameSender(nextNormal, msg)}
+                                    isSameSenderAsPrev={sameSender(prevNormal, msg)}
+                                    isGroupConversation={isGroupConversation}
+                                    reactionEmojis={reactionByMessageUuid[msg.uuid] || []}
+                                    replyParent={replyParent}
+                                    onReact={handleReact}
+                                    onReply={handleReply}
+                                />
+                            </div>
                         );
                         })}
                     </>
