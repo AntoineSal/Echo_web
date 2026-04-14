@@ -8,6 +8,42 @@ import { isFailedAssetUrl, markFailedAssetUrl } from '../../utils/failedAssetUrl
 import { renderFormattedText } from './richText';
 import './MessageBubble.css';
 
+export const USER_COLORS = [
+    '#e53935', // Red
+    '#d81b60', // Pink
+    '#8e24aa', // Purple
+    '#5e35b1', // Deep Purple
+    '#3949ab', // Indigo
+    '#1e88e5', // Blue
+    '#00897b', // Teal
+    '#2e7d32', // Green
+    '#ef6c00', // Orange
+    '#d84315', // Deep Orange
+    '#6d4c41', // Brown
+    '#546e7a', // Blue Grey
+    '#006064', // Dark Cyan
+    '#33691e', // Dark Green
+    '#b71c1c', // Dark Red
+    '#1a237e'  // Dark Indigo
+];
+
+export const getUserColor = (username?: string | null, uuid?: string | null) => {
+    const seed = uuid || username || "default";
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+        hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    // Mix to improve distribution
+    hash ^= hash >>> 16;
+    hash = Math.imul(hash, 0x85ebca6b);
+    hash ^= hash >>> 13;
+    hash = Math.imul(hash, 0xc2b2ae35);
+    hash ^= hash >>> 16;
+    
+    return USER_COLORS[Math.abs(hash) % USER_COLORS.length];
+};
+
 interface MessageBubbleProps {
     message: Message;
     isFirstInGroup: boolean;
@@ -17,6 +53,7 @@ interface MessageBubbleProps {
     isGroupConversation?: boolean;
     reactionEmojis?: string[];
     replyParent?: Message | null;
+    senderColor?: string;
     onReact?: (messageUuid: string, emoji: string) => void;
     onReply?: (message: Message) => void;
 }
@@ -220,6 +257,7 @@ function MessageBubbleComponent({
     isGroupConversation = false,
     reactionEmojis,
     replyParent,
+    senderColor,
     onReact,
     onReply,
 }: MessageBubbleProps) {
@@ -302,10 +340,6 @@ function MessageBubbleComponent({
                 className={`message-wrapper ${isMe ? 'message-wrapper-mine' : 'message-wrapper-theirs'}${ctxMenu ? ' message-wrapper--active' : ''}`}
                 style={ctxMenu ? { position: 'relative', zIndex: 9999 } : undefined}
             >
-                {!isMe && isFirstInGroup && isGroupConversation && (
-                    <div className="sender-name">{message.sender_username}</div>
-                )}
-
                 <div className={`message-content-row${isMe ? ' message-content-row--mine' : ''}`}>
                     {!isMe && (
                         <div className="timestamp-container-left">
@@ -318,6 +352,12 @@ function MessageBubbleComponent({
                         className={`${bubbleClasses.join(' ')}${reactionEmojis && reactionEmojis.length > 0 ? ' has-reaction' : ''}${ctxMenu ? ' message-bubble--active' : ''}`}
                         onClick={handleClick}
                     >
+                        {/* Sender name for group chats */}
+                        {!isMe && isFirstInGroup && isGroupConversation && (
+                            <div className="sender-name" style={{ color: senderColor || getUserColor(message.sender_username, message.sender_uuid), marginTop: 0, marginBottom: 4, marginLeft: 0 }}>
+                                {message.sender_username}
+                            </div>
+                        )}
                         {/* Reply quote */}
                         {replyParent && (
                             <div className={`reply-quote ${isMe ? 'reply-quote--mine' : 'reply-quote--theirs'}`}>

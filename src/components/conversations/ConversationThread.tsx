@@ -3,7 +3,7 @@ import { useMessages, type Message } from '../../hooks/useMessages';
 import { useWebSocketMessages } from '../../hooks/useWebSocketMessages';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { MessageBubble } from './MessageBubble';
+import { MessageBubble, USER_COLORS } from './MessageBubble';
 import { AgentContentRenderer } from './AgentContentRenderer';
 import { normalizeAgentRenderPayload, normalizeRawAgentContentText } from '../../utils/agentRenderPayload';
 import { buildMessageReactionContent, extractReactionMapFromMessages, isReactionEventMessage } from '../../utils/messageReactions';
@@ -506,6 +506,24 @@ export function ConversationThread({
         return map;
     }, [orderedMessages]);
 
+    // Compute stable sequential colors for participants seen in messages
+    const senderColorMap = useMemo(() => {
+        const map = new Map<string, string>();
+        let colorIndex = 0;
+        
+        for (const msg of orderedMessages) {
+            const key = msg.sender_uuid || msg.sender_username;
+            if (key && key !== user?.uuid && key !== user?.username && !msg.is_ai_generated) {
+                if (!map.has(key)) {
+                    map.set(key, USER_COLORS[colorIndex % USER_COLORS.length]);
+                    colorIndex++;
+                }
+            }
+        }
+        
+        return map;
+    }, [orderedMessages, user]);
+
     // Send a reaction
     const handleReact = useCallback((targetMessageUuid: string, emoji: string) => {
         const content = buildMessageReactionContent(targetMessageUuid, emoji);
@@ -616,6 +634,7 @@ export function ConversationThread({
                                     isSameSenderAsNext={sameSender(nextNormal, msg)}
                                     isSameSenderAsPrev={sameSender(prevNormal, msg)}
                                     isGroupConversation={isGroupConversation}
+                                    senderColor={senderColorMap.get(msg.sender_uuid || '') || senderColorMap.get(msg.sender_username || '')}
                                     reactionEmojis={reactionByMessageUuid[msg.uuid] || []}
                                     replyParent={replyParent}
                                     onReact={handleReact}
