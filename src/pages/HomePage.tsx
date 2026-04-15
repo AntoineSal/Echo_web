@@ -5,6 +5,7 @@ import {
     IoPeopleOutline, IoCalendarOutline,
     IoCloseOutline, IoCheckmarkOutline,
 } from 'react-icons/io5';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversations } from '../hooks/useConversations';
 import { useNotificationsSummary, type MessageSummary } from '../hooks/useNotificationsSummary';
@@ -17,6 +18,7 @@ import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
 import { AgentContentRenderer } from '../components/conversations/AgentContentRenderer';
 import { renderFormattedText } from '../components/conversations/richText';
+import { syncConversationsByType } from '../services/localSync';
 import './HomePage.css';
 
 // Map suggestion icon names to actual components
@@ -30,6 +32,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 
 export default function HomePage() {
     const { user, isLoggedIn } = useAuth();
+    const queryClient = useQueryClient();
     const { privateConversations, groupConversations, agentConversations } = useConversations();
     const { summaries, loading, dismissSummary } = useNotificationsSummary();
     const { friendRequests, updateFriendRequest } = useFriendRequests();
@@ -100,11 +103,19 @@ export default function HomePage() {
                 `${API_BASE_URL}/groups/invitations/${uuid}/respond/`,
                 { method: 'POST', body: JSON.stringify({ action: 'accept' }) }
             );
-            if (response.ok) updateGroupInvitation(uuid);
+            if (response.ok) {
+                updateGroupInvitation(uuid);
+                // Sync group conversations immediately so the new group appears without delay
+                if (user?.uuid) {
+                    syncConversationsByType(user.uuid, 'group').then(() => {
+                        queryClient.invalidateQueries({ queryKey: ['conversations', 'groups'] });
+                    }).catch(console.error);
+                }
+            }
         } catch (error) {
             console.error('Error accepting group invitation', error);
         }
-    }, [updateGroupInvitation]);
+    }, [updateGroupInvitation, user?.uuid, queryClient]);
 
     const handleDeclineGroup = useCallback(async (uuid: string) => {
         try {
