@@ -9,6 +9,17 @@ import { API_BASE_URL } from '@mobile/config/api';
 import { useQueryClient } from '@tanstack/react-query';
 import './WebBottomBar.css';
 
+const getFirstNonEmptyLine = (text?: string): string => {
+    if (!text) return 'Message sans texte';
+    const firstLine = text
+        .split('\n')
+        .map((line) => line.trim())
+        .find((line) => line.length > 0);
+
+    if (!firstLine) return 'Message sans texte';
+    return firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine;
+};
+
 // ── Staged file preview item ───────────────────────────────────────────────
 function StagedFileChip({ file, onRemove }: { file: File; onRemove: () => void }) {
     const isImage = file.type.startsWith('image/');
@@ -204,9 +215,9 @@ export default function WebBottomBar() {
                         <IoArrowUndoOutline size={13} className="wbb-reply-preview__icon" />
                         <div className="wbb-reply-preview__accent" />
                         <div className="wbb-reply-preview__text">
-                            <span className="wbb-reply-preview__sender">{replyTo.sender_username}</span>
+                            <span className="wbb-reply-preview__sender">Réponse à {replyTo.sender_username || 'message'}</span>
                             <span className="wbb-reply-preview__content">
-                                {replyTo.attachments?.length ? '📎 Pièce jointe' : (replyTo.content ?? '').slice(0, 80)}
+                                {replyTo.attachments?.length ? '📎 Pièce jointe' : getFirstNonEmptyLine(replyTo.content)}
                             </span>
                         </div>
                         <button

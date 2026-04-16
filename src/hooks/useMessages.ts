@@ -730,6 +730,13 @@ export function useMessages(conversationId: string | null) {
 
                 if (user?.uuid) {
                     if (payload && typeof payload === 'object' && 'uuid' in payload) {
+                        
+                        // FIX: Since the backend doesn't return parent_message_uuid in the generic /create endpoint, 
+                        // we inject it manually to ensure UI deduplication and rendering work correctly.
+                        if (parentMessageUuid && !payload.parent_message_uuid) {
+                            payload.parent_message_uuid = parentMessageUuid;
+                        }
+
                         webLogger.info('messages', 'Persisting confirmed sent message locally', {
                             ownerUuid: user.uuid,
                             conversationUuid: conversationId,

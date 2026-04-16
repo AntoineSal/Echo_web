@@ -44,6 +44,17 @@ export const getUserColor = (username?: string | null, uuid?: string | null) => 
     return USER_COLORS[Math.abs(hash) % USER_COLORS.length];
 };
 
+const getFirstNonEmptyLine = (text?: string): string => {
+    if (!text) return 'Message sans texte';
+    const firstLine = text
+        .split('\n')
+        .map((line) => line.trim())
+        .find((line) => line.length > 0);
+
+    if (!firstLine) return 'Message sans texte';
+    return firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine;
+};
+
 interface MessageBubbleProps {
     message: Message;
     isFirstInGroup: boolean;
@@ -361,9 +372,9 @@ function MessageBubbleComponent({
                         {/* Reply quote */}
                         {replyParent && (
                             <div className={`reply-quote ${isMe ? 'reply-quote--mine' : 'reply-quote--theirs'}`}>
-                                <span className="reply-quote__sender">{replyParent.sender_username}</span>
+                                <span className="reply-quote__sender">Réponse à {replyParent.sender_username || 'message'}</span>
                                 <span className="reply-quote__text">
-                                    {replyParent.attachments?.length ? '📎 Pièce jointe' : (replyParent.content ?? '').slice(0, 80)}
+                                    {replyParent.attachments?.length ? '📎 Pièce jointe' : getFirstNonEmptyLine(replyParent.content)}
                                 </span>
                             </div>
                         )}
