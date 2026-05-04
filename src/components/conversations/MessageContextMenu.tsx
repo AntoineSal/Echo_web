@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { IoCopyOutline, IoFlagOutline, IoArrowUndoOutline } from 'react-icons/io5';
+import { IoCopyOutline, IoFlagOutline, IoArrowUndoOutline, IoInformationCircleOutline } from 'react-icons/io5';
 import './MessageContextMenu.css';
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '🔥'];
@@ -13,12 +13,13 @@ interface MessageContextMenuProps {
   onReact: (emoji: string) => void;
   onReply: () => void;
   onCopy: () => void;
+  onInfo: () => void;
   onReport: () => void;
   onClose: () => void;
 }
 
 export function MessageContextMenu({
-  bubbleRect, isMe, messageContent, onReact, onReply, onCopy, onReport, onClose,
+  bubbleRect, isMe, messageContent, onReact, onReply, onCopy, onInfo, onReport, onClose,
 }: MessageContextMenuProps) {
   const reactionsRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
@@ -112,6 +113,11 @@ export function MessageContextMenu({
             Copier le texte
           </button>
         )}
+
+        <button type="button" className="msg-ctx-menu__action" onClick={() => { onInfo(); onClose(); }}>
+          <IoInformationCircleOutline size={16} className="msg-ctx-menu__action-icon" />
+          Infos
+        </button>
 
         <button type="button" className="msg-ctx-menu__action msg-ctx-menu__action--danger" onClick={() => { onReport(); onClose(); }}>
           <IoFlagOutline size={16} className="msg-ctx-menu__action-icon" />

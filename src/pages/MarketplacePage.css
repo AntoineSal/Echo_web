@@ -141,6 +141,26 @@
     gap: 10px;
 }
 
+/* ── Skeleton loading ── */
+.cat-skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+}
+
+.cat-skeleton-card {
+    height: 72px;
+    border-radius: 18px;
+    background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.07) 50%, rgba(0,0,0,0.04) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
 /* ── Tool card (collapsed) ── */
 .cat-card {
     position: relative;

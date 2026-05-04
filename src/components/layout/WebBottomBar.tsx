@@ -109,12 +109,15 @@ export default function WebBottomBar() {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const sendLockRef = useRef(false);
 
     const isChat = !!selectedConversation;
     const canSend = text.trim().length > 0 || stagedFiles.length > 0;
 
     const handleSend = () => {
         if (!canSend) return;
+        if (sendLockRef.current) return;
+        sendLockRef.current = true;
 
         if (isChat && sendCallback.current) {
             if (stagedFiles.length > 0) {
@@ -132,6 +135,10 @@ export default function WebBottomBar() {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
         }
+
+        window.setTimeout(() => {
+            sendLockRef.current = false;
+        }, 450);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

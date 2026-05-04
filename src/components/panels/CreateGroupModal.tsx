@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { IoClose, IoPeopleOutline, IoCreateOutline, IoKeyOutline, IoAddCircle, IoEnterOutline } from 'react-icons/io5';
-import { fetchWithAuth } from '@mobile/services/apiClient';
-import { API_BASE_URL } from '@mobile/config/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../../contexts/AuthContext';
+import { createGroupAndSync, joinGroupByCodeAndSync } from '../../services/groupCreation';
 import './CreateGroupModal.css';
 
 interface CreateGroupModalProps {
@@ -12,6 +12,7 @@ interface CreateGroupModalProps {
 type Mode = 'create' | 'join' | null;
 
 export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
+    const { user } = useAuth();
     const queryClient = useQueryClient();
     const [mode, setMode] = useState<Mode>(null);
 
@@ -20,44 +21,47 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
     const [description, setDescription] = useState('');
     const [creating, setCreating] = useState(false);
     const [createDone, setCreateDone] = useState(false);
+    const [createError, setCreateError] = useState<string | null>(null);
 
     // Join state
     const [inviteCode, setInviteCode] = useState('');
     const [joining, setJoining] = useState(false);
     const [joinDone, setJoinDone] = useState(false);
+    const [joinError, setJoinError] = useState<string | null>(null);
 
     const handleCreate = async () => {
         if (!groupName.trim()) return;
         setCreating(true);
+        setCreateError(null);
         try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/groups/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: groupName.trim(), description: description.trim() }),
+            await createGroupAndSync({
+                ownerUuid: user?.uuid,
+                queryClient,
+                name: groupName,
+                description,
             });
-            if (res.ok) {
-                await queryClient.invalidateQueries({ queryKey: ['conversations'] });
-                setCreateDone(true);
-                setTimeout(onClose, 1200);
-            }
-        } catch { /* silent */ } finally { setCreating(false); }
+            setCreateDone(true);
+            setTimeout(onClose, 1200);
+        } catch (error) {
+            setCreateError(error instanceof Error ? error.message : 'Impossible de créer le groupe.');
+        } finally { setCreating(false); }
     };
 
     const handleJoin = async () => {
         if (!inviteCode.trim()) return;
         setJoining(true);
+        setJoinError(null);
         try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/groups/join/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ invite_code: inviteCode.trim() }),
+            await joinGroupByCodeAndSync({
+                ownerUuid: user?.uuid,
+                queryClient,
+                inviteCode,
             });
-            if (res.ok) {
-                await queryClient.invalidateQueries({ queryKey: ['conversations'] });
-                setJoinDone(true);
-                setTimeout(onClose, 1200);
-            }
-        } catch { /* silent */ } finally { setJoining(false); }
+            setJoinDone(true);
+            setTimeout(onClose, 1200);
+        } catch (error) {
+            setJoinError(error instanceof Error ? error.message : 'Impossible de rejoindre le groupe.');
+        } finally { setJoining(false); }
     };
 
     return (
@@ -108,6 +112,7 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
                             <span className="cgm-char-count">{description.length}/200</span>
 
                             {createDone && <p className="cgm-done">Groupe créé ✓</p>}
+                            {createError && <p className="cgm-error">{createError}</p>}
 
                             <div className="cgm-btn-row">
                                 <button className="cgm-btn-cancel" onClick={() => setMode(null)}>Annuler</button>
@@ -151,6 +156,7 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
                             </div>
 
                             {joinDone && <p className="cgm-done">Demande envoyée ✓</p>}
+                            {joinError && <p className="cgm-error">{joinError}</p>}
 
                             <div className="cgm-btn-row">
                                 <button className="cgm-btn-cancel" onClick={() => setMode(null)}>Annuler</button>

@@ -465,7 +465,7 @@ export class WebDatabaseManager {
 
             const sameSender = candidate.raw.sender_uuid === message.raw.sender_uuid;
             const sameContent = candidate.raw.content === message.raw.content;
-            const sameParent = candidate.raw.parent_message_uuid === message.raw.parent_message_uuid;
+            const sameParent = (candidate.raw.parent_message_uuid ?? null) === (message.raw.parent_message_uuid ?? null);
             const closeInTime = Math.abs(candidate.created_at_ms - message.created_at_ms) < 5 * 60 * 1000;
 
             return sameSender && sameContent && sameParent && closeInTime;

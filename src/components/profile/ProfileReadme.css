@@ -1,0 +1,236 @@
+/* ══ ProfileReadme — pleine largeur, style Echo ══ */
+
+.preadme {
+    width: 100%;
+    overflow: hidden;
+    border-radius: 32px;
+    animation: preadme-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes preadme-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ══════════════════════════════════════════
+   STYLE : pokemon
+   Pokédex entry card, jaune & rouge doux
+══════════════════════════════════════════ */
+
+.preadme--pokemon {
+    background: linear-gradient(150deg, #fffef7 0%, #fff9e6 60%, #fff4d6 100%);
+    border: 2px solid rgba(255, 203, 5, 0.35);
+    box-shadow:
+        0 4px 24px rgba(255, 203, 5, 0.1),
+        0 1px 4px rgba(0, 0, 0, 0.05);
+    position: relative;
+}
+
+/* Bande rouge Pokédex en haut */
+.preadme--pokemon::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, #e3350d 0%, #e3350d 50%, #ffcb05 50%, #ffcb05 100%);
+    border-radius: 32px 32px 0 0;
+}
+
+.preadme-pokemon-inner {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    min-height: 240px;
+    position: relative;
+}
+
+/* ── Pokéball watermark ── */
+.preadme-pokemon-ball {
+    position: absolute;
+    right: 320px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 160px;
+    height: 160px;
+    opacity: 0.055;
+    pointer-events: none;
+}
+
+/* SVG inline dans le composant */
+.preadme-pokemon-ball svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* ── Zone principale ── */
+.preadme-pokemon-main {
+    padding: 40px 40px 36px 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Numéro d'entrée Pokédex */
+.preadme-pokemon-entry {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(227, 53, 13, 0.55);
+    margin: 0 0 6px;
+}
+
+/* Nom */
+.preadme-pokemon-name {
+    font-size: 44px;
+    font-weight: 900;
+    color: #1a1a2e;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    margin: 0 0 14px;
+}
+
+/* Badges de type */
+.preadme-pokemon-types {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+}
+
+.preadme-type-badge {
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.preadme-type-badge--psy   { background: #f366b9; color: #fff; }
+.preadme-type-badge--feu   { background: #ff6c31; color: #fff; }
+.preadme-type-badge--eau   { background: #4d90d5; color: #fff; }
+.preadme-type-badge--elec  { background: #f4d23c; color: #3d3010; }
+.preadme-type-badge--acier { background: #5a8ea2; color: #fff; }
+.preadme-type-badge--plante{ background: #63bb5b; color: #fff; }
+
+/* Description Pokédex */
+.preadme-pokemon-desc {
+    font-size: 14px;
+    color: #3d3a2e;
+    line-height: 1.75;
+    max-width: 560px;
+    margin: 0;
+    font-style: italic;
+}
+.preadme-pokemon-desc--empty {
+    color: #c8bc98;
+    font-size: 13px;
+}
+
+/* ── Colonne droite — fiche stats ── */
+.preadme-pokemon-card {
+    padding: 36px 48px 36px 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    min-width: 240px;
+    border-left: 1px dashed rgba(255, 203, 5, 0.4);
+}
+
+/* Bloc infos */
+.preadme-pokemon-infos {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.preadme-pokemon-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.preadme-pokemon-info__label {
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: rgba(227, 53, 13, 0.5);
+}
+
+.preadme-pokemon-info__value {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a1a2e;
+}
+
+/* Barre HP */
+.preadme-pokemon-hp {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.preadme-pokemon-hp__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.preadme-pokemon-hp__label {
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: rgba(227, 53, 13, 0.5);
+}
+
+.preadme-pokemon-hp__value {
+    font-size: 18px;
+    font-weight: 900;
+    color: #1a1a2e;
+    letter-spacing: -0.5px;
+}
+
+.preadme-pokemon-hp__bar {
+    width: 100%;
+    height: 7px;
+    background: rgba(0, 0, 0, 0.07);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.preadme-pokemon-hp__fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #63bb5b, #a8e063);
+    animation: hp-fill 1s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+    transform-origin: left;
+}
+
+@keyframes hp-fill {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+}
+
+@media (max-width: 780px) {
+    .preadme-pokemon-inner {
+        grid-template-columns: 1fr;
+    }
+    .preadme-pokemon-card {
+        border-left: none;
+        border-top: 1px dashed rgba(255, 203, 5, 0.4);
+        padding: 20px 44px 32px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 20px;
+        min-width: unset;
+    }
+    .preadme-pokemon-infos { margin-bottom: 0; flex-direction: row; gap: 20px; flex-wrap: wrap; }
+    .preadme-pokemon-hp { min-width: 160px; flex: 1; }
+    .preadme-pokemon-name { font-size: 32px; }
+    .preadme-pokemon-ball { display: none; }
+}

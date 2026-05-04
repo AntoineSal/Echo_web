@@ -84,6 +84,11 @@
   padding: 4px 2px;
 }
 
+.conv-panel__grid--private {
+  grid-template-columns: repeat(3, 80px);
+  justify-content: center;
+}
+
 /* ── Conversation square — mirrors mobile ConversationSquare ── */
 .conv-square {
   position: relative;
@@ -223,6 +228,79 @@
   z-index: 3;
   text-align: center;
   box-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+/* Chevron inside the name badge for expandable parent groups */
+.conv-square__chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: rgba(10, 145, 104, 0.8);
+  cursor: pointer;
+  padding: 1px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.conv-square__chevron:hover {
+  color: rgba(10, 145, 104, 1);
+  background: rgba(10, 145, 104, 0.12);
+}
+
+/* Subgroup variant — slightly smaller, same style */
+.conv-square--subgroup {
+  box-shadow: 0 0 4px rgba(10, 145, 104, 0.2);
+}
+
+/* ── Groups layout with inline expansion ── */
+
+.conv-panel__groups-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px 2px;
+}
+
+.conv-panel__group-row-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.conv-panel__grid--groups-row {
+  display: grid;
+  grid-template-columns: repeat(3, 80px);
+  gap: 10px;
+  padding: 4px 0;
+}
+
+/* Inline subgroup expansion — mirrors mobile inlineExpandedRow */
+.conv-panel__subgroup-expansion {
+  margin: 0 0 6px 0;
+  padding: 10px;
+  background: rgba(10, 145, 104, 0.18);
+  border-radius: 14px;
+  animation: subgroup-expand 0.2s ease both;
+}
+
+@keyframes subgroup-expand {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.conv-panel__grid--subgroups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 72px);
+  gap: 8px;
+}
+
+.conv-panel__grid--subgroups .conv-square {
+  width: 72px;
+  height: 72px;
 }
 
 .conv-square__name-badge--agent {
@@ -260,6 +338,16 @@
   letter-spacing: -0.01em;
 }
 
+/* Expandable name badge — whole badge acts as toggle */
+.conv-square__name-badge--expandable {
+  cursor: pointer;
+}
+
+.conv-square__name-badge--expandable:hover {
+  background: rgba(255, 255, 255, 1);
+  opacity: 0.85;
+}
+
 /* ── Loading / empty ── */
 .conv-panel__loading {
   display: flex;
@@ -290,4 +378,16 @@
   color: rgba(255, 255, 255, 0.4);
   font-size: 13px;
   font-style: italic;
+}
+
+.conv-panel__empty--sm {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.conv-panel__spinner--sm {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+  margin: 8px auto;
 }

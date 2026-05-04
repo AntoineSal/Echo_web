@@ -3,24 +3,20 @@ import {
     IoSearch, IoSparkles, IoChevronForward,
     IoChatbubbleOutline, IoClose, IoExtensionPuzzleOutline,
 } from 'react-icons/io5';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useConversations } from '../hooks/useConversations';
 import { useNavigation } from '../contexts/NavigationContext';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
 import {
-    TOOL_CATEGORIES, TOOLS,
-    getCategoryById, searchTools,
-    type ToolItem,
+    TOOL_CATEGORIES,
+    getCategoryById, enrichAgent,
+    type ToolItem, type BackendAgent,
 } from '../data/toolsCatalog';
 import './MarketplacePage.css';
 
-// ── Rect of a card for expand animation ──
 interface CardRect {
-    top: number;
-    left: number;
-    width: number;
-    height: number;
+    top: number; left: number; width: number; height: number;
 }
 
 export default function MarketplacePage() {
@@ -35,16 +31,36 @@ export default function MarketplacePage() {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isStartingChat, setIsStartingChat] = useState(false);
 
-    // Refs for all card elements
     const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-    // Filtered tools
-    const searchResults = search.trim() ? searchTools(search) : TOOLS;
+    // ── Fetch agents publics depuis le backend ──
+    const { data: tools = [], isLoading } = useQuery({
+        queryKey: ['agents', 'public', 'catalog'],
+        queryFn: async (): Promise<ToolItem[]> => {
+            const res = await fetchWithAuth(`${API_BASE_URL}/framework/agents/public/`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            const agents: BackendAgent[] = Array.isArray(data) ? data : data.results || [];
+            return agents.map(enrichAgent);
+        },
+        staleTime: 5 * 60_000,
+    });
+
+    // ── Filtrage ──
+    const q = search.trim().toLowerCase();
+    const searchResults = q
+        ? tools.filter(t =>
+            t.name.toLowerCase().includes(q) ||
+            t.description.toLowerCase().includes(q) ||
+            t.examples.some(e => e.toLowerCase().includes(q))
+          )
+        : tools;
+
     const displayedTools = activeCategory
         ? searchResults.filter(t => t.categoryId === activeCategory)
         : searchResults;
 
-    // ── Open a tool: capture rect, then animate expand ──
+    // ── Expand / collapse animations ──
     const handleCardClick = useCallback((tool: ToolItem) => {
         const el = cardRefs.current.get(tool.id);
         if (el) {
@@ -52,72 +68,61 @@ export default function MarketplacePage() {
             setOriginRect({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
         }
         setSelectedTool(tool);
-        // Trigger expand on next frame so the DOM paints at origin first
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => setIsExpanded(true));
-        });
+        requestAnimationFrame(() => requestAnimationFrame(() => setIsExpanded(true)));
     }, []);
 
-    // ── Close: animate back to origin ──
     const handleClose = useCallback(() => {
         setIsExpanded(false);
-        // Wait for collapse animation to finish before unmounting
-        setTimeout(() => {
-            setSelectedTool(null);
-            setOriginRect(null);
-        }, 380);
+        setTimeout(() => { setSelectedTool(null); setOriginRect(null); }, 380);
     }, []);
 
-    // Close on Escape
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && selectedTool) handleClose(); };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [selectedTool, handleClose]);
 
-    // ── Start a new Jarvis conversation ──
-    const startJarvisChat = useCallback(async () => {
+    // ── Démarrer/ouvrir une conversation avec l'agent du tool sélectionné ──
+    const startAgentChat = useCallback(async (agentUuid?: string) => {
         if (isStartingChat) return;
+        const uuid = agentUuid ?? selectedTool?.agentUuid;
+        if (!uuid) return;
         setIsStartingChat(true);
         try {
-            const agentsRes = await fetchWithAuth(`${API_BASE_URL}/framework/agents/`);
-            if (agentsRes.ok) {
-                const agentsData = await agentsRes.json();
-                const agents = Array.isArray(agentsData) ? agentsData : agentsData.results || [];
-                const jarvisAgent = agents.find((a: any) =>
-                    a.name.toLowerCase().includes('jarvis')
-                ) || agents[0];
-
-                if (jarvisAgent) {
-                    const res = await fetchWithAuth(
-                        `${API_BASE_URL}/framework/agents/${jarvisAgent.uuid}/start-conversation/`,
-                        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
-                    );
-                    if (res.ok) {
-                        await queryClient.invalidateQueries({ queryKey: ['conversations', 'agents'] });
-                        const listRes = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/agents/`);
-                        if (listRes.ok) {
-                            const data = await listRes.json();
-                            const convs = Array.isArray(data) ? data : data.results || [];
-                            const sorted = convs
-                                .filter((c: any) =>
-                                    c.framework_agent?.uuid === jarvisAgent.uuid ||
-                                    c.agent_info?.uuid === jarvisAgent.uuid
-                                )
-                                .sort((a: any, b: any) =>
-                                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                                );
-                            if (sorted[0]) {
-                                openConversation({
-                                    ...sorted[0],
-                                    conversation_type: 'agent' as const,
-                                    name: sorted[0].framework_agent?.name || jarvisAgent.name || 'Jarvis',
-                                    avatar_url: sorted[0].framework_agent?.avatar_url || jarvisAgent.avatar_url || '',
-                                });
-                                handleClose();
-                                return;
-                            }
-                        }
+            // Chercher une conversation existante avec cet agent
+            const existing = agentConversations.find((c: any) =>
+                c.framework_agent?.uuid === uuid ||
+                c.agent_info?.uuid === uuid ||
+                c.agent_uuid === uuid
+            );
+            if (existing) {
+                openConversation(existing);
+                handleClose();
+                return;
+            }
+            // Créer une nouvelle conversation
+            const res = await fetchWithAuth(
+                `${API_BASE_URL}/framework/agents/${uuid}/start-conversation/`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
+            );
+            if (res.ok) {
+                await queryClient.invalidateQueries({ queryKey: ['conversations', 'agents'] });
+                const listRes = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/agents/`);
+                if (listRes.ok) {
+                    const data = await listRes.json();
+                    const convs: any[] = Array.isArray(data) ? data : data.results || [];
+                    const newConv = convs
+                        .filter((c: any) => c.framework_agent?.uuid === uuid || c.agent_info?.uuid === uuid)
+                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                    if (newConv) {
+                        openConversation({
+                            ...newConv,
+                            conversation_type: 'agent' as const,
+                            name: newConv.framework_agent?.name || selectedTool?.name || 'Agent',
+                            avatar_url: newConv.framework_agent?.avatar_url || '',
+                        });
+                        handleClose();
+                        return;
                     }
                 }
             }
@@ -129,19 +134,14 @@ export default function MarketplacePage() {
         } finally {
             setIsStartingChat(false);
         }
-    }, [agentConversations, openConversation, navigate, queryClient, isStartingChat, handleClose]);
+    }, [isStartingChat, selectedTool, agentConversations, openConversation, navigate, queryClient, handleClose]);
 
-    // ── Expanded card target rect (centered, max 480×520) ──
+    // ── Rect de la carte expandée ──
     const getExpandedRect = (): React.CSSProperties => {
         const maxW = 480;
         const maxH = Math.min(540, window.innerHeight - 80);
         const w = Math.min(maxW, window.innerWidth - 48);
-        return {
-            top: (window.innerHeight - maxH) / 2,
-            left: (window.innerWidth - w) / 2,
-            width: w,
-            height: maxH,
-        };
+        return { top: (window.innerHeight - maxH) / 2, left: (window.innerWidth - w) / 2, width: w, height: maxH };
     };
 
     const wrapStyle: React.CSSProperties = selectedTool
@@ -152,12 +152,11 @@ export default function MarketplacePage() {
                 : getExpandedRect()
         : {};
 
-    // Stagger counter
     let cardIdx = 0;
 
     return (
         <div className="cat-page">
-            {/* ── Floating search bar ── */}
+            {/* Barre de recherche */}
             <div className="cat-search-bar">
                 <div className="cat-search-wrap">
                     <IoSearch size={17} className="cat-search-icon" />
@@ -175,7 +174,7 @@ export default function MarketplacePage() {
                 </div>
             </div>
 
-            {/* ── Category chips ── */}
+            {/* Chips catégories */}
             <div className="cat-chips">
                 <button
                     className={`cat-chip ${activeCategory === null ? 'cat-chip--active' : ''}`}
@@ -194,13 +193,19 @@ export default function MarketplacePage() {
                 ))}
             </div>
 
-            {/* ── Scrollable grid ── */}
+            {/* Grille */}
             <div className={`cat-scroll ${selectedTool ? 'cat-scroll--blurred' : ''}`}>
-                {displayedTools.length === 0 ? (
+                {isLoading ? (
+                    <div className="cat-skeleton-grid">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <div key={i} className="cat-skeleton-card" style={{ animationDelay: `${i * 0.06}s` }} />
+                        ))}
+                    </div>
+                ) : displayedTools.length === 0 ? (
                     <div className="cat-empty">
                         <IoExtensionPuzzleOutline size={48} className="cat-empty__icon" />
                         <p className="cat-empty__text">
-                            Aucun outil trouvé pour « {search} »
+                            {search ? `Aucun outil trouvé pour « ${search} »` : 'Aucun agent disponible'}
                         </p>
                     </div>
                 ) : (
@@ -238,24 +243,20 @@ export default function MarketplacePage() {
                 )}
             </div>
 
-            {/* ── Expanded card (grows from clicked card position) ── */}
+            {/* Carte expandée */}
             {selectedTool && (
                 <>
                     <div className="cat-expanded-backdrop" onClick={handleClose} />
                     <div
                         className="cat-expanded-wrap"
-                        style={{
-                            ...wrapStyle,
-                            borderRadius: isExpanded ? 24 : 18,
-                            overflow: 'hidden',
-                        }}
+                        style={{ ...wrapStyle, borderRadius: isExpanded ? 24 : 18, overflow: 'hidden' }}
                     >
                         <ExpandedCard
                             tool={selectedTool}
                             isExpanded={isExpanded}
                             onClose={handleClose}
-                            onStartChat={startJarvisChat}
-                            onExampleClick={startJarvisChat}
+                            onStartChat={() => startAgentChat(selectedTool.agentUuid)}
+                            onExampleClick={() => startAgentChat(selectedTool.agentUuid)}
                             isStartingChat={isStartingChat}
                         />
                     </div>
@@ -265,7 +266,7 @@ export default function MarketplacePage() {
     );
 }
 
-// ── Expanded card content ──
+// ── Carte expandée ──
 function ExpandedCard({ tool, isExpanded, onClose, onStartChat, onExampleClick, isStartingChat }: {
     tool: ToolItem;
     isExpanded: boolean;
@@ -278,7 +279,6 @@ function ExpandedCard({ tool, isExpanded, onClose, onStartChat, onExampleClick, 
     const catColor = category?.color || '#0a9168';
 
     if (!isExpanded) {
-        // Mini preview matching the card layout (shown during collapse animation)
         return (
             <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14, height: '100%', background: '#fff' }}>
                 <div style={{
@@ -301,10 +301,7 @@ function ExpandedCard({ tool, isExpanded, onClose, onStartChat, onExampleClick, 
     return (
         <div className="cat-expanded">
             <div className="cat-expanded__header">
-                <div
-                    className="cat-expanded__icon"
-                    style={{ background: catColor + '14', border: `1.5px solid ${catColor}25` }}
-                >
+                <div className="cat-expanded__icon" style={{ background: catColor + '14', border: `1.5px solid ${catColor}25` }}>
                     {tool.icon}
                 </div>
                 <div className="cat-expanded__titles">
@@ -324,11 +321,7 @@ function ExpandedCard({ tool, isExpanded, onClose, onStartChat, onExampleClick, 
                         <h3 className="cat-expanded__examples-label">Exemples de requêtes</h3>
                         <div className="cat-expanded__examples">
                             {tool.examples.map((ex, i) => (
-                                <button
-                                    key={i}
-                                    className="cat-expanded__example"
-                                    onClick={() => onExampleClick(ex)}
-                                >
+                                <button key={i} className="cat-expanded__example" onClick={() => onExampleClick(ex)}>
                                     <IoChatbubbleOutline size={15} className="cat-expanded__example-icon" />
                                     « {ex} »
                                 </button>
@@ -344,7 +337,7 @@ function ExpandedCard({ tool, isExpanded, onClose, onStartChat, onExampleClick, 
                     style={{ opacity: isStartingChat ? 0.6 : 1 }}
                 >
                     <span className="cat-expanded__cta-icon"><IoSparkles size={18} /></span>
-                    {isStartingChat ? 'Ouverture...' : 'Demander à Jarvis'}
+                    {isStartingChat ? 'Ouverture...' : 'Parler à cet agent'}
                 </button>
             </div>
         </div>

@@ -99,6 +99,44 @@
     margin-right: 4px;
 }
 
+.thread-sticky-day {
+    position: absolute;
+    top: 68px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 19;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+
+.thread-sticky-day--docked {
+    opacity: 1;
+}
+
+.thread-sticky-day__label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.76);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(71, 85, 105, 0.8);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-transform: capitalize;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+.thread-sticky-day--animate .thread-sticky-day__label {
+    animation: thread-day-chip-bloom 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
 /* ── Messages area ── */
 .thread-messages {
     flex: 1;
@@ -138,6 +176,36 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
+.thread-day-separator {
+    align-self: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 14px 0 10px;
+    width: 100%;
+}
+
+.thread-day-separator__label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    color: rgba(71, 85, 105, 0.78);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-transform: capitalize;
+    transition: opacity 0.16s ease, transform 0.2s ease;
+}
+
+.thread-day-separator__label--parked {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.985);
+}
+
 .thread-history-spinner {
     animation: rotate-spinner 1s linear infinite;
 }
@@ -147,19 +215,40 @@
     100% { transform: rotate(360deg); }
 }
 
+@keyframes thread-day-chip-bloom {
+    0% {
+        opacity: 0.98;
+        transform: translateY(0) scale(0.996);
+    }
+    50% {
+        opacity: 1;
+        transform: translateY(0) scale(1.008);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 /* ── System message ── */
 .system-message-container {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     margin: 8px 0;
+    padding: 0 20px;
 }
 .system-message-text {
-    font-size: 12px;
-    color: #6b7280;
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 12px;
-    padding: 4px 12px;
+    font-size: 13px;
+    color: #666;
+    font-style: italic;
     text-align: center;
+    line-height: 18px;
+}
+.system-message-time {
+    font-size: 10px;
+    color: #999;
+    margin-top: 4px;
 }
 
 /* ═══════════════════════════════════════════════════════════

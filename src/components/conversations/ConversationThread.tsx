@@ -7,6 +7,7 @@ import { MessageBubble, USER_COLORS } from './MessageBubble';
 import { AgentContentRenderer } from './AgentContentRenderer';
 import { normalizeAgentRenderPayload, normalizeRawAgentContentText } from '../../utils/agentRenderPayload';
 import { buildMessageReactionContent, extractReactionMapFromMessages, isReactionEventMessage } from '../../utils/messageReactions';
+import { isSystemMessage } from '../../utils/messageHelpers';
 import { IoChevronBack, IoChevronDown, IoChevronUp, IoChatbubbleOutline, IoSend, IoSparkles } from 'react-icons/io5';
 import './ConversationThread.css';
 
@@ -38,6 +39,27 @@ function resolveAgentName(msg: Message): string {
         msg.sender_username ||
         'Agent IA'
     );
+}
+
+function getDayKey(value: string | number): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+}
+
+function formatDaySeparator(value: string | number): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
 }
 
 /** Extract first non-empty text line for collapsed preview */
@@ -209,6 +231,14 @@ export function ConversationThread({
     const lastHistoryOldestUuidRef = useRef<string | null>(null);
     const lastHistoryMessageCountRef = useRef(-1);
     const messageElementByUuidRef = useRef(new Map<string, HTMLDivElement>());
+    const daySeparatorElementByKeyRef = useRef(new Map<string, HTMLSpanElement>());
+    const stickyDayLabelRef = useRef<HTMLSpanElement>(null);
+    const dayBubbleAnimationTimeoutRef = useRef<number | null>(null);
+    const [expandedReplyMessages, setExpandedReplyMessages] = useState<Set<string>>(new Set());
+    const [stickyDayKey, setStickyDayKey] = useState<string>('');
+    const [stickyDayLabel, setStickyDayLabel] = useState<string>('');
+    const [stickyDayAnimating, setStickyDayAnimating] = useState(false);
+    const [stickyDayDocked, setStickyDayDocked] = useState(false);
 
     const sendMutateRef = useRef(sendMessage.mutate);
     sendMutateRef.current = sendMessage.mutate;
@@ -253,7 +283,20 @@ export function ConversationThread({
         lastHistoryLoadAtRef.current = 0;
         lastHistoryOldestUuidRef.current = null;
         lastHistoryMessageCountRef.current = -1;
+        setExpandedReplyMessages(new Set());
+        setStickyDayKey('');
+        setStickyDayLabel('');
+        setStickyDayAnimating(false);
+        setStickyDayDocked(false);
     }, [conversationId]);
+
+    useEffect(() => {
+        return () => {
+            if (dayBubbleAnimationTimeoutRef.current) {
+                window.clearTimeout(dayBubbleAnimationTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const handleThreadSend = useCallback((text: string, parentUuid: string) => {
         sendMutateRef.current({ conversationId, content: text, parentMessageUuid: parentUuid });
@@ -293,6 +336,51 @@ export function ConversationThread({
         return best;
     }, [orderedMessages]);
 
+    const updateStickyDayLabel = useCallback(() => {
+        const container = messagesContainerRef.current;
+        if (!container || orderedMessages.length === 0) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const scanTop = containerRect.top + 6;
+        let nextDayKey = getDayKey(orderedMessages[0].created_at);
+        let nextDayLabel = formatDaySeparator(orderedMessages[0].created_at);
+
+        for (const message of orderedMessages) {
+            const element = messageElementByUuidRef.current.get(message.uuid);
+            if (!element) continue;
+
+            const rect = element.getBoundingClientRect();
+            if (rect.bottom <= scanTop) continue;
+
+            nextDayKey = getDayKey(message.created_at);
+            nextDayLabel = formatDaySeparator(message.created_at);
+            break;
+        }
+
+        const activeSeparator = daySeparatorElementByKeyRef.current.get(nextDayKey);
+        const activeSeparatorRect = activeSeparator?.getBoundingClientRect();
+        const stickyRect = stickyDayLabelRef.current?.getBoundingClientRect();
+        const stickyDockBottom = stickyRect?.bottom ?? (containerRect.top + 18);
+        const nextDocked = !!activeSeparatorRect && activeSeparatorRect.bottom <= stickyDockBottom;
+
+        if (stickyDayKey === nextDayKey && stickyDayLabel === nextDayLabel) {
+            setStickyDayDocked(nextDocked);
+            return;
+        }
+
+        setStickyDayAnimating(true);
+        if (dayBubbleAnimationTimeoutRef.current) {
+            window.clearTimeout(dayBubbleAnimationTimeoutRef.current);
+        }
+        dayBubbleAnimationTimeoutRef.current = window.setTimeout(() => {
+            setStickyDayAnimating(false);
+        }, 360);
+
+        setStickyDayKey(nextDayKey);
+        setStickyDayLabel(nextDayLabel);
+        setStickyDayDocked(nextDocked);
+    }, [orderedMessages, stickyDayKey, stickyDayLabel]);
+
     const triggerLoadOlderMessages = useCallback((reason: 'nearTop') => {
         const container = messagesContainerRef.current;
         if (!container) return;
@@ -304,12 +392,6 @@ export function ConversationThread({
         if (now - lastHistoryLoadAtRef.current < 500) return;
 
         const currentMessageCount = orderedMessages.length;
-        const repeatedSameCursorWithoutProgress =
-            !!oldestRenderedMessageUuid &&
-            oldestRenderedMessageUuid === lastHistoryOldestUuidRef.current &&
-            currentMessageCount === lastHistoryMessageCountRef.current;
-        if (repeatedSameCursorWithoutProgress) return;
-
         const repeatedSameCursorTooSoon =
             !!oldestRenderedMessageUuid &&
             oldestRenderedMessageUuid === lastHistoryOldestUuidRef.current &&
@@ -333,6 +415,13 @@ export function ConversationThread({
             })
             .finally(() => {
                 historyLoadInFlightRef.current = false;
+                window.setTimeout(() => {
+                    const currentContainer = messagesContainerRef.current;
+                    if (!currentContainer) return;
+                    if (currentContainer.scrollTop <= 120) {
+                        historyTopTriggerArmedRef.current = true;
+                    }
+                }, 80);
             });
     }, [captureVisibleAnchor, hasMore, isFetchingMore, loadMore, oldestRenderedMessageUuid, orderedMessages.length]);
 
@@ -363,7 +452,8 @@ export function ConversationThread({
         if (container.scrollTop <= 120) {
             triggerLoadOlderMessages('nearTop');
         }
-    }, [triggerLoadOlderMessages]);
+        updateStickyDayLabel();
+    }, [triggerLoadOlderMessages, updateStickyDayLabel]);
 
     useLayoutEffect(() => {
         const container = messagesContainerRef.current;
@@ -397,7 +487,8 @@ export function ConversationThread({
         if (shouldStickToBottomRef.current) {
             scrollToBottom('auto');
         }
-    }, [orderedMessages.length, scrollToBottom]);
+        updateStickyDayLabel();
+    }, [orderedMessages.length, scrollToBottom, updateStickyDayLabel]);
 
     useEffect(() => {
         const frame = window.requestAnimationFrame(() => {
@@ -406,6 +497,20 @@ export function ConversationThread({
 
         return () => window.cancelAnimationFrame(frame);
     }, [maybeLoadOlderMessages, orderedMessages.length]);
+
+    useEffect(() => {
+        if (isFetchingMore || !hasMore) return;
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        if (container.scrollTop <= 120) {
+            const timeout = window.setTimeout(() => {
+                maybeLoadOlderMessages();
+            }, 120);
+            return () => window.clearTimeout(timeout);
+        }
+        return undefined;
+    }, [hasMore, isFetchingMore, maybeLoadOlderMessages, orderedMessages.length]);
 
     useEffect(() => {
         const container = messagesContainerRef.current;
@@ -471,6 +576,32 @@ export function ConversationThread({
         messageElementByUuidRef.current.delete(uuid);
     }, []);
 
+    const registerDaySeparatorElement = useCallback((dayKey: string, element: HTMLSpanElement | null) => {
+        if (element) {
+            daySeparatorElementByKeyRef.current.set(dayKey, element);
+            return;
+        }
+        daySeparatorElementByKeyRef.current.delete(dayKey);
+    }, []);
+
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container || !stickyDayKey) return;
+
+        const updateDockState = () => {
+            const containerRect = container.getBoundingClientRect();
+            const activeSeparator = daySeparatorElementByKeyRef.current.get(stickyDayKey);
+            const activeSeparatorRect = activeSeparator?.getBoundingClientRect();
+            const stickyRect = stickyDayLabelRef.current?.getBoundingClientRect();
+            const stickyDockBottom = stickyRect?.bottom ?? (containerRect.top + 18);
+            setStickyDayDocked(!!activeSeparatorRect && activeSeparatorRect.bottom <= stickyDockBottom);
+        };
+
+        updateDockState();
+        const raf = window.requestAnimationFrame(updateDockState);
+        return () => window.cancelAnimationFrame(raf);
+    }, [orderedMessages.length, stickyDayKey]);
+
     const childrenByParent = useMemo(() => {
         const map = new Map<string, Message[]>();
         for (const msg of orderedMessages) {
@@ -479,6 +610,14 @@ export function ConversationThread({
             list.push(msg);
             map.set(msg.parent_message_uuid, list);
         }
+        map.forEach((list) => {
+            list.sort((left, right) => {
+                const leftTs = typeof left.created_at === 'number' ? left.created_at : Date.parse(String(left.created_at)) || 0;
+                const rightTs = typeof right.created_at === 'number' ? right.created_at : Date.parse(String(right.created_at)) || 0;
+                if (leftTs !== rightTs) return leftTs - rightTs;
+                return String(left.uuid).localeCompare(String(right.uuid));
+            });
+        });
         return map;
     }, [orderedMessages]);
 
@@ -505,6 +644,34 @@ export function ConversationThread({
         for (const msg of orderedMessages) map.set(msg.uuid, msg);
         return map;
     }, [orderedMessages]);
+
+    const buildReplyAncestry = useCallback((message: Message): Message[] => {
+        const ancestry: Message[] = [];
+        let parentUuid = message.parent_message_uuid || null;
+        const visited = new Set<string>();
+
+        while (parentUuid && !visited.has(parentUuid)) {
+            visited.add(parentUuid);
+            const parentMessage = messageByUuid.get(parentUuid);
+            if (!parentMessage) break;
+            ancestry.unshift(parentMessage);
+            parentUuid = parentMessage.parent_message_uuid || null;
+        }
+
+        return ancestry;
+    }, [messageByUuid]);
+
+    const toggleReplyExpansion = useCallback((messageUuid: string) => {
+        setExpandedReplyMessages((previous) => {
+            const next = new Set(previous);
+            if (next.has(messageUuid)) {
+                next.delete(messageUuid);
+            } else {
+                next.add(messageUuid);
+            }
+            return next;
+        });
+    }, []);
 
     // Compute stable sequential colors for participants seen in messages
     const senderColorMap = useMemo(() => {
@@ -558,6 +725,12 @@ export function ConversationThread({
                 </div>
             </div>
 
+            {!!stickyDayLabel && (
+                <div className={`thread-sticky-day${stickyDayDocked ? ' thread-sticky-day--docked' : ''}${stickyDayAnimating ? ' thread-sticky-day--animate' : ''}`}>
+                    <span ref={stickyDayLabelRef} className="thread-sticky-day__label">{stickyDayLabel}</span>
+                </div>
+            )}
+
             {/* Messages area */}
             <div
                 ref={messagesContainerRef}
@@ -599,11 +772,14 @@ export function ConversationThread({
                         }
 
                         // System message
-                        if (msg.message_type === 'system') {
+                        if (isSystemMessage(msg)) {
                             return (
                                 <div key={msg.uuid} ref={(element) => registerMessageElement(msg.uuid, element)} className="thread-message-item">
                                     <div className="system-message-container">
                                         <span className="system-message-text">{msg.content}</span>
+                                        <span className="system-message-time">
+                                            {new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
                                     </div>
                                 </div>
                             );
@@ -612,6 +788,8 @@ export function ConversationThread({
                         // Normal message — grouping
                         const prevMsg = arr[index - 1] ?? null;
                         const nextMsg = arr[index + 1] ?? null;
+                        const dayKey = getDayKey(msg.created_at);
+                        const showDaySeparator = !prevMsg || getDayKey(prevMsg.created_at) !== dayKey;
 
                         const prevNormal = prevMsg && !agentReplyUuids.has(prevMsg.uuid) && !isAgentMessage(prevMsg) ? prevMsg : null;
                         const nextNormal = nextMsg && !agentReplyUuids.has(nextMsg.uuid) && !isAgentMessage(nextMsg) ? nextMsg : null;
@@ -621,26 +799,63 @@ export function ConversationThread({
                                 ? a.sender_uuid === b.sender_uuid
                                 : a.sender_username === b.sender_username);
 
-                        const replyParent = msg.parent_message_uuid
-                            ? (messageByUuid.get(msg.parent_message_uuid) ?? null)
-                            : null;
+                        const canVisuallyGroup = (a: Message | null, b: Message) => {
+                            if (!a) return false;
+                            if (!sameSender(a, b)) return false;
+
+                            const aParent = a.parent_message_uuid || null;
+                            const bParent = b.parent_message_uuid || null;
+
+                            if (aParent !== bParent) return false;
+                            if (!!aParent !== !!bParent) return false;
+
+                            const aHasReplyQuote = !!a.parent_message_uuid;
+                            const bHasReplyQuote = !!b.parent_message_uuid;
+                            if (aHasReplyQuote !== bHasReplyQuote) return false;
+
+                            if (Math.abs(new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) > 5 * 60 * 1000) return false;
+
+                            return true;
+                        };
+
+                        const replyAncestry = msg.parent_message_uuid ? buildReplyAncestry(msg) : [];
+                        const replyDirectParent = replyAncestry.length > 0 ? replyAncestry[replyAncestry.length - 1] : null;
+                        const siblingReplies = replyDirectParent
+                            ? (childrenByParent.get(replyDirectParent.uuid) || []).filter((candidate) => candidate.uuid !== msg.uuid)
+                            : [];
 
                         return (
-                            <div key={msg.uuid || msg.id} ref={(element) => registerMessageElement(msg.uuid, element)} className="thread-message-item">
-                                <MessageBubble
-                                    message={msg}
-                                    isFirstInGroup={!sameSender(prevNormal, msg)}
-                                    isLastInGroup={!sameSender(nextNormal, msg)}
-                                    isSameSenderAsNext={sameSender(nextNormal, msg)}
-                                    isSameSenderAsPrev={sameSender(prevNormal, msg)}
-                                    isGroupConversation={isGroupConversation}
-                                    senderColor={senderColorMap.get(msg.sender_uuid || '') || senderColorMap.get(msg.sender_username || '')}
-                                    reactionEmojis={reactionByMessageUuid[msg.uuid] || []}
-                                    replyParent={replyParent}
-                                    onReact={handleReact}
-                                    onReply={handleReply}
-                                />
-                            </div>
+                            <React.Fragment key={msg.uuid || msg.id}>
+                                {showDaySeparator && (
+                                    <div className="thread-day-separator">
+                                        <span
+                                            ref={(element) => registerDaySeparatorElement(dayKey, element)}
+                                            className={`thread-day-separator__label${stickyDayKey === dayKey && stickyDayDocked ? ' thread-day-separator__label--parked' : ''}`}
+                                        >
+                                            {formatDaySeparator(msg.created_at)}
+                                        </span>
+                                    </div>
+                                )}
+                                <div ref={(element) => registerMessageElement(msg.uuid, element)} className="thread-message-item">
+                                    <MessageBubble
+                                        message={msg}
+                                        isFirstInGroup={!canVisuallyGroup(prevNormal, msg)}
+                                        isLastInGroup={!canVisuallyGroup(nextNormal, msg)}
+                                        isSameSenderAsNext={canVisuallyGroup(nextNormal, msg)}
+                                        isSameSenderAsPrev={canVisuallyGroup(prevNormal, msg)}
+                                        isGroupConversation={isGroupConversation}
+                                        senderColor={senderColorMap.get(msg.sender_uuid || '') || senderColorMap.get(msg.sender_username || '')}
+                                        reactionEmojis={reactionByMessageUuid[msg.uuid] || []}
+                                        replyParent={replyDirectParent}
+                                        replyAncestry={replyAncestry}
+                                        replySiblingMessages={siblingReplies}
+                                        isReplyExpanded={expandedReplyMessages.has(msg.uuid)}
+                                        onToggleReplyExpanded={toggleReplyExpansion}
+                                        onReact={handleReact}
+                                        onReply={handleReply}
+                                    />
+                                </div>
+                            </React.Fragment>
                         );
                         })}
                     </>

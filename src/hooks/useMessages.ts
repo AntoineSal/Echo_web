@@ -62,6 +62,7 @@ export interface Message {
     sender_avatar_url?: string;
     content: string;
     created_at: string | number;
+    read_at?: string | number | null;
     is_read?: boolean;
     is_ai_generated?: boolean;
     message_type?: 'user' | 'system' | 'ai_generated' | string;

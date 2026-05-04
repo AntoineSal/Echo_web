@@ -1,10 +1,12 @@
 import React, { useState, useCallback, useRef } from 'react';
+import { IoCheckmark, IoCheckmarkDone, IoChevronDown, IoChevronUp, IoTimeOutline, IoWarningOutline } from 'react-icons/io5';
 import type { Message, InteractiveMessageData, FormField } from '../../hooks/useMessages';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
 import { MessageContextMenu } from './MessageContextMenu';
 import { isFailedAssetUrl, markFailedAssetUrl } from '../../utils/failedAssetUrls';
+import { isSystemMessage } from '../../utils/messageHelpers';
 import { renderFormattedText } from './richText';
 import './MessageBubble.css';
 
@@ -64,9 +66,26 @@ interface MessageBubbleProps {
     isGroupConversation?: boolean;
     reactionEmojis?: string[];
     replyParent?: Message | null;
+    replyAncestry?: Message[];
+    replySiblingMessages?: Message[];
+    isReplyExpanded?: boolean;
     senderColor?: string;
+    onToggleReplyExpanded?: (messageUuid: string) => void;
     onReact?: (messageUuid: string, emoji: string) => void;
     onReply?: (message: Message) => void;
+}
+
+interface ConversationParticipantDetail {
+    username: string;
+    surnom?: string;
+    user_uuid?: string;
+    last_seen?: string | null;
+}
+
+interface MessageInfoEntry {
+    userUuid: string;
+    label: string;
+    seenAt: string;
 }
 
 // ── Audio player ─────────────────────────────────────────────────────────────
@@ -268,19 +287,25 @@ function MessageBubbleComponent({
     isGroupConversation = false,
     reactionEmojis,
     replyParent,
+    replyAncestry = [],
+    replySiblingMessages = [],
+    isReplyExpanded = false,
     senderColor,
+    onToggleReplyExpanded,
     onReact,
     onReply,
 }: MessageBubbleProps) {
     const { user } = useAuth();
     const [ctxMenu, setCtxMenu] = useState<DOMRect | null>(null);
+    const [messageInfoEntries, setMessageInfoEntries] = useState<MessageInfoEntry[] | null>(null);
+    const [messageInfoLoading, setMessageInfoLoading] = useState(false);
     const bubbleRef = useRef<HTMLDivElement>(null);
 
     const isMe =
         (message.sender_uuid && user?.uuid && message.sender_uuid === user.uuid) ||
         message.sender_username?.toLowerCase() === user?.username?.toLowerCase();
 
-    const isSystemMessage = message.message_type === 'system';
+    const systemMessage = isSystemMessage(message);
 
     const handleClick = useCallback((e: React.MouseEvent) => {
         // Don't open menu when clicking interactive elements inside the bubble
@@ -305,7 +330,54 @@ function MessageBubbleComponent({
         onReply?.(message);
     }, [message, onReply]);
 
-    if (isSystemMessage) {
+    const handleInfo = useCallback(async () => {
+        if (!message.conversation_uuid) return;
+
+        setMessageInfoLoading(true);
+        setMessageInfoEntries(null);
+
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/${message.conversation_uuid}/participants/`);
+            if (!res.ok) throw new Error('Impossible de charger les infos');
+
+            const detail = await res.json();
+            const participants = (detail.participants || []) as ConversationParticipantDetail[];
+            const messageCreatedAtMs = new Date(message.created_at).getTime();
+
+            const entries = participants
+                .filter((participant) => participant.user_uuid && participant.user_uuid !== user?.uuid)
+                .map((participant) => {
+                    let seenAt: string | null = null;
+
+                    if (message.is_read && message.read_at && participants.length <= 2) {
+                        seenAt = String(message.read_at);
+                    } else if (participant.last_seen) {
+                        const participantSeenAtMs = new Date(participant.last_seen).getTime();
+                        if (!Number.isNaN(participantSeenAtMs) && participantSeenAtMs >= messageCreatedAtMs) {
+                            seenAt = participant.last_seen;
+                        }
+                    }
+
+                    if (!seenAt) return null;
+
+                    return {
+                        userUuid: participant.user_uuid || participant.username,
+                        label: participant.surnom || participant.username,
+                        seenAt,
+                    };
+                })
+                .filter((entry): entry is MessageInfoEntry => !!entry)
+                .sort((left, right) => new Date(right.seenAt).getTime() - new Date(left.seenAt).getTime());
+
+            setMessageInfoEntries(entries);
+        } catch {
+            setMessageInfoEntries([]);
+        } finally {
+            setMessageInfoLoading(false);
+        }
+    }, [message.conversation_uuid, message.created_at, message.is_read, message.read_at, user?.uuid]);
+
+    if (systemMessage) {
         return (
             <div className="system-message-container">
                 <span className="system-message-text">{message.content}</span>
@@ -344,6 +416,91 @@ function MessageBubbleComponent({
     const attachments = message.attachments ?? [];
     const isInteractive = message.interactive_data?.is_interactive === true
         && !message.interactive_data?.hidden_meta?.is_form_response;
+    const hasExpandedReplyDetails = replyAncestry.length > 0 || replySiblingMessages.length > 0;
+
+    const renderReplyPreviewText = (targetMessage: Message) => {
+        if (targetMessage.attachments?.length) {
+            return '📎 Pièce jointe';
+        }
+        return getFirstNonEmptyLine(targetMessage.content);
+    };
+
+    const renderReplyContext = () => {
+        if (!replyParent) return null;
+
+        return (
+            <div className={`reply-quote ${isMe ? 'reply-quote--mine' : 'reply-quote--theirs'}`}>
+                <button
+                    type="button"
+                    className="reply-quote__header"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onToggleReplyExpanded?.(message.uuid);
+                    }}
+                    disabled={!hasExpandedReplyDetails}
+                >
+                    <div className="reply-quote__header-text">
+                        <span className="reply-quote__sender">Réponse à {replyParent.sender_username || 'message'}</span>
+                        {!isReplyExpanded && (
+                            <span className="reply-quote__text">
+                                {renderReplyPreviewText(replyParent)}
+                            </span>
+                        )}
+                    </div>
+                    {hasExpandedReplyDetails && (
+                        <span className="reply-quote__chevron" aria-hidden="true">
+                            {isReplyExpanded ? <IoChevronUp size={15} /> : <IoChevronDown size={15} />}
+                        </span>
+                    )}
+                </button>
+
+                {isReplyExpanded && hasExpandedReplyDetails && (
+                    <div className="reply-quote__expanded">
+                        {replyAncestry.length > 0 && (
+                            <div className="reply-quote__chain">
+                                {replyAncestry.map((chainMessage, index) => {
+                                    const isDirectParent = index === replyAncestry.length - 1;
+                                    return (
+                                        <div
+                                            key={chainMessage.uuid}
+                                            className={`reply-quote__chain-bubble${isDirectParent ? ' reply-quote__chain-bubble--direct' : ''}`}
+                                        >
+                                            <span className="reply-quote__chain-author">
+                                                {chainMessage.sender_username || 'Inconnu'}
+                                            </span>
+                                            <span className="reply-quote__chain-text">
+                                                {isDirectParent
+                                                    ? (chainMessage.content?.trim() ? chainMessage.content : renderReplyPreviewText(chainMessage))
+                                                    : renderReplyPreviewText(chainMessage)}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {replySiblingMessages.length > 0 && (
+                            <div className="reply-quote__siblings">
+                                <span className="reply-quote__siblings-title">Autres réponses au même parent</span>
+                                <div className="reply-quote__siblings-list">
+                                    {replySiblingMessages.map((siblingMessage) => (
+                                        <div key={siblingMessage.uuid} className="reply-quote__sibling-bubble">
+                                            <span className="reply-quote__sibling-author">
+                                                {siblingMessage.sender_username || 'Inconnu'}
+                                            </span>
+                                            <span className="reply-quote__sibling-text">
+                                                {renderReplyPreviewText(siblingMessage)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     return (
         <>
@@ -352,12 +509,6 @@ function MessageBubbleComponent({
                 style={ctxMenu ? { position: 'relative', zIndex: 9999 } : undefined}
             >
                 <div className={`message-content-row${isMe ? ' message-content-row--mine' : ''}`}>
-                    {!isMe && (
-                        <div className="timestamp-container-left">
-                            <span className="external-timestamp">{formattedTime}</span>
-                        </div>
-                    )}
-
                     <div
                         ref={bubbleRef}
                         className={`${bubbleClasses.join(' ')}${reactionEmojis && reactionEmojis.length > 0 ? ' has-reaction' : ''}${ctxMenu ? ' message-bubble--active' : ''}`}
@@ -369,15 +520,7 @@ function MessageBubbleComponent({
                                 {message.sender_username}
                             </div>
                         )}
-                        {/* Reply quote */}
-                        {replyParent && (
-                            <div className={`reply-quote ${isMe ? 'reply-quote--mine' : 'reply-quote--theirs'}`}>
-                                <span className="reply-quote__sender">Réponse à {replyParent.sender_username || 'message'}</span>
-                                <span className="reply-quote__text">
-                                    {replyParent.attachments?.length ? '📎 Pièce jointe' : getFirstNonEmptyLine(replyParent.content)}
-                                </span>
-                            </div>
-                        )}
+                        {renderReplyContext()}
 
                         {attachments.length > 0 && (
                             <div className="attachment-stack">
@@ -418,22 +561,26 @@ function MessageBubbleComponent({
                                 ))}
                             </div>
                         )}
-                    </div>
 
-                    {isMe && (
-                        <div className="timestamp-container-right">
-                            {message.isPending ? (
-                                <span className="status-icon pending">◷</span>
-                            ) : message.sendError ? (
-                                <span className="status-icon error">!</span>
-                            ) : message.is_read ? (
-                                <span className="status-icon read">✓✓</span>
-                            ) : (
-                                <span className="status-icon delivered">✓</span>
-                            )}
-                            <span className="external-timestamp">{formattedTime}</span>
-                        </div>
-                    )}
+                        {isLastInGroup && (
+                            <div className={`message-meta ${isMe ? 'message-meta--mine' : 'message-meta--theirs'}`}>
+                                <span className="message-meta__time">{formattedTime}</span>
+                                {isMe && (
+                                    <>
+                                        {message.isPending ? (
+                                            <span className="status-icon pending" aria-label="Envoi en cours"><IoTimeOutline size={12} /></span>
+                                        ) : message.sendError ? (
+                                            <span className="status-icon error" aria-label="Erreur d'envoi"><IoWarningOutline size={12} /></span>
+                                        ) : message.is_read ? (
+                                            <span className="status-icon read" aria-label="Vu"><IoCheckmarkDone size={13} /></span>
+                                        ) : (
+                                            <span className="status-icon delivered" aria-label="Distribué"><IoCheckmark size={12} /></span>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -445,9 +592,48 @@ function MessageBubbleComponent({
                     onReact={handleReact}
                     onReply={handleReply}
                     onCopy={handleCopy}
+                    onInfo={() => { void handleInfo(); }}
                     onReport={handleReport}
                     onClose={() => setCtxMenu(null)}
                 />
+            )}
+
+            {messageInfoLoading && (
+                <div className="message-info-overlay" onMouseDown={() => setMessageInfoLoading(false)}>
+                    <div className="message-info-card" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="message-info-card__title">Infos du message</div>
+                        <div className="message-info-card__subtitle">Chargement...</div>
+                    </div>
+                </div>
+            )}
+
+            {messageInfoEntries && !messageInfoLoading && (
+                <div className="message-info-overlay" onMouseDown={() => setMessageInfoEntries(null)}>
+                    <div className="message-info-card" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="message-info-card__title">Infos du message</div>
+                        <div className="message-info-card__subtitle">
+                            {messageInfoEntries.length > 0 ? 'Vu par' : 'Aucune lecture confirmée pour l’instant'}
+                        </div>
+                        {messageInfoEntries.length > 0 && (
+                            <div className="message-info-card__list">
+                                {messageInfoEntries.map((entry) => (
+                                    <div key={entry.userUuid} className="message-info-card__row">
+                                        <span className="message-info-card__name">{entry.label}</span>
+                                        <span className="message-info-card__time">
+                                            {new Date(entry.seenAt).toLocaleString('fr-FR', {
+                                                day: '2-digit',
+                                                month: '2-digit',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            })}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
         </>
     );
@@ -470,6 +656,9 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
         prev.isGroupConversation === next.isGroupConversation &&
         prev.replyParent?.uuid === next.replyParent?.uuid &&
         prev.replyParent?.content === next.replyParent?.content &&
+        prev.replyAncestry === next.replyAncestry &&
+        prev.replySiblingMessages === next.replySiblingMessages &&
+        prev.isReplyExpanded === next.isReplyExpanded &&
         areReactionListsEqual(prev.reactionEmojis, next.reactionEmojis)
     );
 });

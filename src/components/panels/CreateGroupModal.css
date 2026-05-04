@@ -185,6 +185,15 @@
     margin: 4px 0;
 }
 
+.cgm-error {
+    color: #dc2626;
+    font-weight: 500;
+    font-size: 13px;
+    text-align: center;
+    margin: 4px 0;
+    white-space: pre-wrap;
+}
+
 .cgm-btn-row {
     display: flex;
     gap: 10px;

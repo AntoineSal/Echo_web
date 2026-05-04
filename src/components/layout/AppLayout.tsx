@@ -37,9 +37,9 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
           activePage={currentPage}
           onNavigate={navigate}
           panelContent={isPanelOpen ? panelContent(currentPage) : null}
-          panelWidth={SIDEBAR_PANEL_DEFAULT_WIDTH}
+          panelWidth={panelWidth}
           isPanelOpen={isPanelOpen}
-          isResizing={false}
+          isResizing={isResizingSidebar}
           userPhoto={userPhoto}
           userName={userName}
           isLoggedIn={isLoggedIn}
