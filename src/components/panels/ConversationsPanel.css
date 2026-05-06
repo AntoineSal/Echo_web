@@ -391,3 +391,66 @@
   border-width: 2px;
   margin: 8px auto;
 }
+
+/* ── Jarvis local history ── */
+.conv-panel__jarvis-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px;
+}
+
+.conv-panel__jarvis-history > .conv-square {
+  margin-bottom: 2px;
+}
+
+.conv-panel__jarvis-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px;
+  border: none;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #1f2937;
+  text-align: left;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.conv-panel__jarvis-card-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #065f46;
+  background: rgba(10, 145, 104, 0.1);
+}
+
+.conv-panel__jarvis-card-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.conv-panel__jarvis-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-panel__jarvis-card-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #6b7280;
+}

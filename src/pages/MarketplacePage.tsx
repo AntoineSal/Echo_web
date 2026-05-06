@@ -3,9 +3,8 @@ import {
     IoSearch, IoSparkles, IoChevronForward,
     IoChatbubbleOutline, IoClose, IoExtensionPuzzleOutline,
 } from 'react-icons/io5';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useConversations } from '../hooks/useConversations';
-import { useNavigation } from '../contexts/NavigationContext';
+import { useQuery } from '@tanstack/react-query';
+import { useJarvis } from '../contexts/JarvisContext';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
 import {
@@ -20,9 +19,7 @@ interface CardRect {
 }
 
 export default function MarketplacePage() {
-    const { agentConversations } = useConversations();
-    const { openConversation, navigate } = useNavigation();
-    const queryClient = useQueryClient();
+    const { sendJarvisMessage } = useJarvis();
 
     const [search, setSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -82,59 +79,25 @@ export default function MarketplacePage() {
         return () => window.removeEventListener('keydown', onKey);
     }, [selectedTool, handleClose]);
 
-    // ── Démarrer/ouvrir une conversation avec l'agent du tool sélectionné ──
-    const startAgentChat = useCallback(async (agentUuid?: string) => {
+    // ── V0: demander a Jarvis d'utiliser le tool selectionne ──
+    const askJarvisWithTool = useCallback(async (example?: string) => {
         if (isStartingChat) return;
-        const uuid = agentUuid ?? selectedTool?.agentUuid;
-        if (!uuid) return;
+        if (!selectedTool) return;
         setIsStartingChat(true);
         try {
-            // Chercher une conversation existante avec cet agent
-            const existing = agentConversations.find((c: any) =>
-                c.framework_agent?.uuid === uuid ||
-                c.agent_info?.uuid === uuid ||
-                c.agent_uuid === uuid
-            );
-            if (existing) {
-                openConversation(existing);
-                handleClose();
-                return;
-            }
-            // Créer une nouvelle conversation
-            const res = await fetchWithAuth(
-                `${API_BASE_URL}/framework/agents/${uuid}/start-conversation/`,
-                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
-            );
-            if (res.ok) {
-                await queryClient.invalidateQueries({ queryKey: ['conversations', 'agents'] });
-                const listRes = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/agents/`);
-                if (listRes.ok) {
-                    const data = await listRes.json();
-                    const convs: any[] = Array.isArray(data) ? data : data.results || [];
-                    const newConv = convs
-                        .filter((c: any) => c.framework_agent?.uuid === uuid || c.agent_info?.uuid === uuid)
-                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                    if (newConv) {
-                        openConversation({
-                            ...newConv,
-                            conversation_type: 'agent' as const,
-                            name: newConv.framework_agent?.name || selectedTool?.name || 'Agent',
-                            avatar_url: newConv.framework_agent?.avatar_url || '',
-                        });
-                        handleClose();
-                        return;
-                    }
-                }
-            }
-            navigate('agents');
+            const prompt = example || `Utilise si pertinent le tool "${selectedTool.name}" pour m'aider.`;
+            await sendJarvisMessage([
+                `Tool souhaite: ${selectedTool.name}`,
+                `Description: ${selectedTool.description}`,
+                `Demande: ${prompt}`,
+            ].join('\n'));
             handleClose();
         } catch {
-            navigate('agents');
             handleClose();
         } finally {
             setIsStartingChat(false);
         }
-    }, [isStartingChat, selectedTool, agentConversations, openConversation, navigate, queryClient, handleClose]);
+    }, [handleClose, isStartingChat, selectedTool, sendJarvisMessage]);
 
     // ── Rect de la carte expandée ──
     const getExpandedRect = (): React.CSSProperties => {
@@ -205,7 +168,7 @@ export default function MarketplacePage() {
                     <div className="cat-empty">
                         <IoExtensionPuzzleOutline size={48} className="cat-empty__icon" />
                         <p className="cat-empty__text">
-                            {search ? `Aucun outil trouvé pour « ${search} »` : 'Aucun agent disponible'}
+                            {search ? `Aucun outil trouvé pour « ${search} »` : 'Aucun outil disponible'}
                         </p>
                     </div>
                 ) : (
@@ -255,8 +218,8 @@ export default function MarketplacePage() {
                             tool={selectedTool}
                             isExpanded={isExpanded}
                             onClose={handleClose}
-                            onStartChat={() => startAgentChat(selectedTool.agentUuid)}
-                            onExampleClick={() => startAgentChat(selectedTool.agentUuid)}
+                            onStartChat={() => askJarvisWithTool()}
+                            onExampleClick={(example) => askJarvisWithTool(example)}
                             isStartingChat={isStartingChat}
                         />
                     </div>
@@ -337,7 +300,7 @@ function ExpandedCard({ tool, isExpanded, onClose, onStartChat, onExampleClick, 
                     style={{ opacity: isStartingChat ? 0.6 : 1 }}
                 >
                     <span className="cat-expanded__cta-icon"><IoSparkles size={18} /></span>
-                    {isStartingChat ? 'Ouverture...' : 'Parler à cet agent'}
+                    {isStartingChat ? 'Envoi...' : 'Demander à Jarvis'}
                 </button>
             </div>
         </div>

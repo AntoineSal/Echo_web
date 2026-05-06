@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useConversations, type Conversation } from '../../hooks/useConversations';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '../../contexts/NavigationContext';
+import { useJarvis } from '../../contexts/JarvisContext';
 import {
   IoSearchOutline, IoAdd,
-  IoChevronDownOutline, IoChevronUpOutline, IoPeopleOutline,
+  IoChevronDownOutline, IoChevronUpOutline, IoSparklesOutline,
 } from 'react-icons/io5';
-import { useQueryClient } from '@tanstack/react-query';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
 import './ConversationsPanel.css';
@@ -40,9 +40,8 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
   const { isLoggedIn } = useAuth();
   const { privateConversations, groupConversations, agentConversations, isLoading } = useConversations();
   const { openConversation, selectedConversation, navigate } = useNavigation();
-  const queryClient = useQueryClient();
+  const { liveTurns } = useJarvis();
   const [search, setSearch] = useState('');
-  const [isStartingJarvis, setIsStartingJarvis] = useState(false);
   const [groupMeta, setGroupMeta] = useState<GroupMeta[]>([]);
   const [expandedGroupUuids, setExpandedGroupUuids] = useState<Record<string, boolean>>({});
   const [fetchedSubgroups, setFetchedSubgroups] = useState<Record<string, SubgroupInfo[]>>({});
@@ -53,7 +52,10 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
     if (filter !== 'groups') return;
     void fetchWithAuth(`${API_BASE_URL}/groups/my-groups/`)
       .then(r => r.ok ? r.json() : [])
-      .then((data: unknown) => setGroupMeta(Array.isArray(data) ? data : (data as any)?.results ?? []));
+      .then((data: unknown) => {
+        const payload = data as { results?: GroupMeta[] };
+        setGroupMeta(Array.isArray(data) ? data : payload.results ?? []);
+      });
   }, [filter]);
 
   // ── Hierarchy maps ──
@@ -95,7 +97,7 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
   switch (filter) {
     case 'private':  conversations = privateConversations; emptyText = 'Aucune conversation'; break;
     case 'groups':   conversations = groupConversations;   emptyText = 'Aucun groupe';        break;
-    case 'agents':   conversations = agentConversations;   emptyText = 'Aucun agent';         break;
+    case 'agents':   conversations = agentConversations;   emptyText = 'Aucun historique Jarvis'; break;
   }
 
   const filtered = search.trim()
@@ -162,52 +164,6 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
     return getSubgroupConvs(conv);
   };
 
-  const handleStartJarvis = async () => {
-    if (isStartingJarvis) return;
-    setIsStartingJarvis(true);
-    try {
-      const agentsRes = await fetchWithAuth(`${API_BASE_URL}/framework/agents/`);
-      if (agentsRes.ok) {
-        const agentsData = await agentsRes.json();
-        const agents = Array.isArray(agentsData) ? agentsData : agentsData.results || [];
-        const jarvisAgent = agents.find((a: any) => a.name.toLowerCase().includes('jarvis')) || agents[0];
-        if (jarvisAgent) {
-          const res = await fetchWithAuth(
-            `${API_BASE_URL}/framework/agents/${jarvisAgent.uuid}/start-conversation/`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
-          );
-          if (res.ok) {
-            await queryClient.invalidateQueries({ queryKey: ['conversations', 'agents'] });
-            const listRes = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/agents/`);
-            if (listRes.ok) {
-              const data = await listRes.json();
-              const convs = Array.isArray(data) ? data : data.results || [];
-              const sorted = convs
-                .filter((c: any) =>
-                  c.framework_agent?.uuid === jarvisAgent.uuid ||
-                  c.agent_info?.uuid === jarvisAgent.uuid
-                )
-                .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-              if (sorted[0]) {
-                openConversation({
-                  ...sorted[0],
-                  conversation_type: 'agent' as const,
-                  name: sorted[0].framework_agent?.name || jarvisAgent.name || 'Jarvis',
-                  avatar_url: sorted[0].framework_agent?.avatar_url || jarvisAgent.avatar_url || '',
-                });
-                return;
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Failed to start Jarvis conversation', e);
-    } finally {
-      setIsStartingJarvis(false);
-    }
-  };
-
   // ── Render a single conversation square ──
   const renderSquare = (conv: Conversation, opts?: { isSubgroup?: boolean }) => {
     const isSelected   = selectedConversation?.uuid === conv.uuid;
@@ -271,6 +227,50 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
           </div>
         )}
       </button>
+    );
+  };
+
+  const renderJarvisHistory = () => {
+    const filteredTurns = search.trim()
+      ? liveTurns.filter(turn =>
+        turn.userMessage.toLowerCase().includes(search.toLowerCase()) ||
+        turn.jarvisResponse.toLowerCase().includes(search.toLowerCase())
+      )
+      : liveTurns;
+
+    return (
+      <div className="conv-panel__jarvis-history">
+        <button
+          className="conv-square conv-square--add"
+          title="Nouvelle demande Jarvis"
+          onClick={() => navigate('home')}
+        >
+          <IoAdd size={38} color="rgba(10, 145, 104, 1)" />
+          <div className="conv-square__name-badge">
+            <span className="conv-square__name">Nouveau</span>
+          </div>
+        </button>
+
+        {filteredTurns.map(turn => (
+          <div key={turn.id} className="conv-panel__jarvis-card">
+            <div className="conv-panel__jarvis-card-icon">
+              <IoSparklesOutline size={16} />
+            </div>
+            <div className="conv-panel__jarvis-card-body">
+              <span className="conv-panel__jarvis-card-title">{turn.userMessage}</span>
+              <span className="conv-panel__jarvis-card-preview">
+                {turn.isProcessing ? 'Jarvis reflechit...' : turn.jarvisResponse}
+              </span>
+            </div>
+          </div>
+        ))}
+
+        {filteredTurns.length === 0 && (
+          <p className="conv-panel__empty">
+            {search ? 'Aucun resultat' : 'Aucun historique Jarvis dans cette session'}
+          </p>
+        )}
+      </div>
     );
   };
 
@@ -373,31 +373,30 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
       </div>
 
       <div className="conv-panel__grid-scroll">
-        {isLoading ? (
+        {filter !== 'agents' && isLoading ? (
           <div className="conv-panel__loading">
             <div className="conv-panel__spinner" />
             <span>Chargement...</span>
           </div>
         ) : (
           <>
-            {filter === 'groups' ? renderGroupsGrid() : (
+            {filter === 'agents' ? renderJarvisHistory() : filter === 'groups' ? renderGroupsGrid() : (
               <div className={`conv-panel__grid${filter === 'private' ? ' conv-panel__grid--private' : ''}`}>
                 <button
-                  className={`conv-square conv-square--add${isStartingJarvis ? ' conv-square--disabled' : ''}`}
+                  className="conv-square conv-square--add"
                   title="Nouveau"
-                  disabled={isStartingJarvis}
-                  onClick={filter === 'agents' ? handleStartJarvis : () => navigate('add-friend')}
+                  onClick={() => navigate('add-friend')}
                 >
                   <IoAdd size={38} color="rgba(10, 145, 104, 1)" />
                   <div className="conv-square__name-badge">
-                    <span className="conv-square__name">{isStartingJarvis ? '...' : (filter === 'agents' ? 'Jarvis' : 'Nouveau')}</span>
+                    <span className="conv-square__name">Nouveau</span>
                   </div>
                 </button>
                 {filtered.map(conv => renderSquare(conv))}
               </div>
             )}
 
-            {filtered.length === 0 && (
+            {filter !== 'agents' && filtered.length === 0 && (
               <p className="conv-panel__empty">{search ? 'Aucun résultat' : emptyText}</p>
             )}
           </>

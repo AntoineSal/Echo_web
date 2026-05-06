@@ -394,18 +394,10 @@
 
 /* ── Body (always in DOM, animated via max-height) ── */
 .agent-card__body {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.35s ease, padding 0.2s ease;
-    padding: 0 14px;
+    padding: 0 14px 14px;
     display: flex;
     flex-direction: column;
     gap: 10px;
-}
-
-.agent-card--expanded .agent-card__body {
-    max-height: 4000px;
-    padding: 0 14px 14px;
 }
 
 .agent-card__body-divider {
@@ -500,6 +492,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    margin-top: 12px;
     background: rgba(255, 255, 255, 0.7);
     border-radius: 22px;
     padding: 5px 5px 5px 14px;

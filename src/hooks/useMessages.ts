@@ -76,6 +76,10 @@ export interface Message {
     agent_info?: { name?: string; uuid?: string };
     ai_agent_name?: string;
     ai_agent_uuid?: string;
+    jarvis_prompt?: string;
+    jarvis_preferred_tool?: string | null;
+    jarvis_thread_root_uuid?: string | null;
+    is_jarvis_thread_root?: boolean;
     // Optimistic flags
     isPending?: boolean;
     sendError?: boolean;

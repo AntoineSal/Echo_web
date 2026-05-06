@@ -3,6 +3,7 @@ import { useMessages, type Message } from '../../hooks/useMessages';
 import { useWebSocketMessages } from '../../hooks/useWebSocketMessages';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useJarvis } from '../../contexts/JarvisContext';
 import { MessageBubble, USER_COLORS } from './MessageBubble';
 import { AgentContentRenderer } from './AgentContentRenderer';
 import { normalizeAgentRenderPayload, normalizeRawAgentContentText } from '../../utils/agentRenderPayload';
@@ -29,6 +30,19 @@ function isAgentMessage(msg: Message): boolean {
         !!msg.ai_agent_name ||
         !!msg.ai_agent_uuid
     );
+}
+
+function isJarvisLocalMessage(msg: Message): boolean {
+    return msg.framework_agent_uuid === 'jarvis-local' || msg.agent_info?.uuid === 'jarvis-local';
+}
+
+function isJarvisThreadRoot(msg: Message): boolean {
+    if (!isJarvisLocalMessage(msg)) return false;
+    return msg.is_jarvis_thread_root !== false && (!msg.jarvis_thread_root_uuid || msg.jarvis_thread_root_uuid === msg.uuid);
+}
+
+function isJarvisThreadChild(msg: Message): boolean {
+    return isJarvisLocalMessage(msg) && !!msg.jarvis_thread_root_uuid && msg.jarvis_thread_root_uuid !== msg.uuid;
 }
 
 function resolveAgentName(msg: Message): string {
@@ -83,25 +97,54 @@ function getContentPreview(content: string): string {
     return firstLine?.trim() ?? '';
 }
 
+function getFirstNonEmptyLineForThread(content?: string): string {
+    if (!content) return 'Message Jarvis';
+    return content.split('\n').map(line => line.trim()).find(Boolean) || 'Message Jarvis';
+}
+
 // ── Agent message card ─────────────────────────────────────────────────────
 interface AgentCardProps {
     msg: Message;
     threadMessages: Message[];
-    conversationId: string;
     isAutoExpanded: boolean;
-    onThreadSend: (text: string, parentUuid: string) => void;
     conversationAvatar?: string;
+    onThreadSend: (text: string, parentUuid: string, parentPreview: string) => Promise<void>;
 }
 
-function AgentCard({ msg, threadMessages, conversationId, isAutoExpanded, onThreadSend, conversationAvatar }: AgentCardProps) {
+function AgentCard({ msg, threadMessages, isAutoExpanded, conversationAvatar, onThreadSend }: AgentCardProps) {
     const { user } = useAuth();
     const [expanded, setExpanded] = useState(isAutoExpanded);
+    const [draft, setDraft] = useState('');
+    const [isSending, setIsSending] = useState(false);
     const agentName = resolveAgentName(msg);
     const preview = getContentPreview(msg.content ?? '');
+    const firstThreadPrompt = threadMessages.find((threadMessage) => !isAgentMessage(threadMessage))?.content;
+    const headerPrompt = msg.jarvis_prompt || firstThreadPrompt || preview;
 
     const formattedTime = msg.created_at
         ? new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
         : '';
+    const canSend = draft.trim().length > 0 && !isSending;
+
+    const handleThreadSubmit = async () => {
+        if (!canSend) return;
+        const value = draft.trim();
+        setDraft('');
+        setIsSending(true);
+        try {
+            await onThreadSend(value, msg.uuid, preview || getFirstNonEmptyLineForThread(msg.content));
+            setExpanded(true);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleThreadKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            void handleThreadSubmit();
+        }
+    };
 
     return (
         <div className={`agent-card ${expanded ? 'agent-card--expanded' : ''}`}>
@@ -126,8 +169,8 @@ function AgentCard({ msg, threadMessages, conversationId, isAutoExpanded, onThre
                     {/* Name + preview */}
                     <div className="agent-card__header-text">
                         <span className="agent-card__name">{agentName}</span>
-                        {!expanded && preview && (
-                            <span className="agent-card__preview">{preview}</span>
+                        {!expanded && headerPrompt && (
+                            <span className="agent-card__preview">{headerPrompt}</span>
                         )}
                     </div>
                 </div>
@@ -147,6 +190,7 @@ function AgentCard({ msg, threadMessages, conversationId, isAutoExpanded, onThre
             </button>
 
             {/* ── Expandable body ──────────────────────────────────────── */}
+            {expanded && (
             <div className="agent-card__body">
 
                 {/* Divider */}
@@ -182,9 +226,6 @@ function AgentCard({ msg, threadMessages, conversationId, isAutoExpanded, onThre
                                         key={tmsg.uuid}
                                         className={`agent-card__thread-msg ${isAgentMsg ? 'agent-card__thread-msg--agent' : isMe ? 'agent-card__thread-msg--mine' : 'agent-card__thread-msg--theirs'}`}
                                     >
-                                        {isAgentMsg && (
-                                            <span className="agent-card__thread-sender agent-card__thread-sender--agent">🤖 {tmsg.sender_username || 'Agent'}</span>
-                                        )}
                                         {!isAgentMsg && !isMe && (
                                             <span className="agent-card__thread-sender">{tmsg.sender_username}</span>
                                         )}
@@ -199,7 +240,28 @@ function AgentCard({ msg, threadMessages, conversationId, isAutoExpanded, onThre
                     </div>
                 )}
 
+                <div className="agent-card__thread-input">
+                    <input
+                        className="agent-card__thread-input-field"
+                        value={draft}
+                        onChange={(event) => setDraft(event.target.value)}
+                        onKeyDown={handleThreadKeyDown}
+                        placeholder="Repondre a Jarvis dans ce fil..."
+                        disabled={isSending}
+                    />
+                    <button
+                        type="button"
+                        className={`agent-card__thread-send ${canSend ? 'active' : ''}`}
+                        onClick={() => void handleThreadSubmit()}
+                        disabled={!canSend}
+                        title="Envoyer a Jarvis"
+                    >
+                        <IoSend size={14} />
+                    </button>
+                </div>
+
             </div>
+            )}
         </div>
     );
 }
@@ -213,10 +275,11 @@ export function ConversationThread({
 }: ConversationThreadProps) {
     const { user } = useAuth();
     const { messages, isLoading, isFetchingMore, hasMore, loadMore, sendMessage, markAsRead } = useMessages(conversationId);
+    const { getLocalConversationMessages, sendJarvisInteraction } = useJarvis();
+    const localJarvisMessages = getLocalConversationMessages(conversationId);
     const { isConnected } = useWebSocketMessages(conversationId);
     const { closeConversation, registerSendCallback, openConversationManagement, replyTo, setReplyTo } = useNavigation();
     const replyToRef = useRef(replyTo);
-    replyToRef.current = replyTo;
 
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const topHistorySentinelRef = useRef<HTMLDivElement>(null);
@@ -241,7 +304,14 @@ export function ConversationThread({
     const [stickyDayDocked, setStickyDayDocked] = useState(false);
 
     const sendMutateRef = useRef(sendMessage.mutate);
-    sendMutateRef.current = sendMessage.mutate;
+
+    useEffect(() => {
+        replyToRef.current = replyTo;
+    }, [replyTo]);
+
+    useEffect(() => {
+        sendMutateRef.current = sendMessage.mutate;
+    }, [sendMessage.mutate]);
 
     const isGroupConversation = conversationType === 'group';
     const isAgentConversation = conversationType === 'agent';
@@ -267,7 +337,7 @@ export function ConversationThread({
             },
         });
         return () => registerSendCallback(null);
-    }, [conversationId, registerSendCallback]);
+    }, [conversationId, registerSendCallback, setReplyTo]);
 
     useEffect(() => {
         if (conversationId) markAsRead();
@@ -298,11 +368,14 @@ export function ConversationThread({
         };
     }, []);
 
-    const handleThreadSend = useCallback((text: string, parentUuid: string) => {
-        sendMutateRef.current({ conversationId, content: text, parentMessageUuid: parentUuid });
-    }, [conversationId]);
+    const mergedMessages = useMemo(() => {
+        const byUuid = new Map<string, Message>();
+        messages.forEach((message) => byUuid.set(message.uuid, message));
+        localJarvisMessages.forEach((message) => byUuid.set(message.uuid, message));
+        return Array.from(byUuid.values());
+    }, [messages, localJarvisMessages]);
 
-    const orderedMessages = useMemo(() => messages.slice().reverse(), [messages]);
+    const orderedMessages = useMemo(() => mergedMessages.slice().reverse(), [mergedMessages]);
     const oldestRenderedMessageUuid = orderedMessages[0]?.uuid ?? null;
 
     const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
@@ -382,6 +455,7 @@ export function ConversationThread({
     }, [orderedMessages, stickyDayKey, stickyDayLabel]);
 
     const triggerLoadOlderMessages = useCallback((reason: 'nearTop') => {
+        void reason;
         const container = messagesContainerRef.current;
         if (!container) return;
         if (!hasMore || isFetchingMore) return;
@@ -625,7 +699,9 @@ export function ConversationThread({
         const agentUuids = new Set(orderedMessages.filter(isAgentMessage).map(m => m.uuid));
         const replyUuids = new Set<string>();
         for (const msg of orderedMessages) {
-            if (msg.parent_message_uuid && agentUuids.has(msg.parent_message_uuid)) {
+            if (isJarvisThreadChild(msg)) {
+                replyUuids.add(msg.uuid);
+            } else if (msg.parent_message_uuid && agentUuids.has(msg.parent_message_uuid)) {
                 replyUuids.add(msg.uuid);
             }
         }
@@ -633,7 +709,7 @@ export function ConversationThread({
     }, [orderedMessages]);
 
     // Build reaction map and set of reaction event UUIDs
-    const { reactionByMessageUuid, reactionEventMessageUuids } = useMemo(
+    const { reactionByMessageUuid } = useMemo(
         () => extractReactionMapFromMessages(orderedMessages),
         [orderedMessages]
     );
@@ -701,6 +777,21 @@ export function ConversationThread({
         setReplyTo({ uuid: msg.uuid, sender_username: msg.sender_username, content: msg.content, attachments: msg.attachments });
     }, [setReplyTo]);
 
+    const handleJarvisThreadSend = useCallback(async (text: string, parentUuid: string, parentPreview: string) => {
+        await sendJarvisInteraction({
+            message: text,
+            mode: 'conversation_thread',
+            toolMode: 'auto',
+            conversationUuid: conversationId,
+            conversationName,
+            conversationType,
+            parentMessageUuid: parentUuid,
+            parentMessagePreview: parentPreview,
+            includeLocalUserMessage: true,
+            jarvisThreadRootUuid: parentUuid,
+        });
+    }, [conversationId, conversationName, conversationType, sendJarvisInteraction]);
+
     const showStatusDot = isConnected && (isAgentConversation || conversationType === 'direct');
 
     return (
@@ -755,17 +846,28 @@ export function ConversationThread({
                         if (isReactionEventMessage(msg.content)) return null;
 
                         // Agent message → expandable card
-                        if (isAgentMessage(msg)) {
-                            const threadMessages = childrenByParent.get(msg.uuid) || [];
+                        if (isAgentMessage(msg) && (!isJarvisLocalMessage(msg) || isJarvisThreadRoot(msg))) {
+                            const directChildren = childrenByParent.get(msg.uuid) || [];
+                            const localJarvisChildren = orderedMessages.filter((candidate) =>
+                                candidate.uuid !== msg.uuid &&
+                                candidate.jarvis_thread_root_uuid === msg.uuid
+                            );
+                            const threadMessages = Array.from(
+                                new Map([...directChildren, ...localJarvisChildren].map((message) => [message.uuid, message]))
+                                    .values()
+                            ).sort((left, right) => {
+                                const leftTs = typeof left.created_at === 'number' ? left.created_at : Date.parse(String(left.created_at)) || 0;
+                                const rightTs = typeof right.created_at === 'number' ? right.created_at : Date.parse(String(right.created_at)) || 0;
+                                return leftTs - rightTs;
+                            });
                             return (
                                 <div key={msg.uuid} ref={(element) => registerMessageElement(msg.uuid, element)} className="thread-message-item">
                                     <AgentCard
                                         msg={msg}
                                         threadMessages={threadMessages}
-                                        conversationId={conversationId}
                                         isAutoExpanded={isAgentConversation}
-                                        onThreadSend={handleThreadSend}
                                         conversationAvatar={conversationAvatar}
+                                        onThreadSend={handleJarvisThreadSend}
                                     />
                                 </div>
                             );

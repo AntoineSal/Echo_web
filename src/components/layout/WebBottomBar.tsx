@@ -1,12 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { IoSend, IoSparkles, IoAttach, IoClose, IoArrowUndoOutline } from 'react-icons/io5';
+import React, { useRef, useState } from 'react';
+import { IoSend, IoSparkles, IoAttach, IoClose, IoArrowUndoOutline, IoConstructOutline } from 'react-icons/io5';
+import { useQuery } from '@tanstack/react-query';
 import { useJarvis } from '../../contexts/JarvisContext';
 import { useNavigation } from '../../contexts/NavigationContext';
-import { useAgentFramework, type Agent } from '../../hooks/useAgentFramework';
-import { useConversations } from '../../hooks/useConversations';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
-import { useQueryClient } from '@tanstack/react-query';
+import { enrichAgent, type BackendAgent, type ToolItem } from '../../data/toolsCatalog';
 import './WebBottomBar.css';
 
 const getFirstNonEmptyLine = (text?: string): string => {
@@ -40,53 +39,33 @@ function StagedFileChip({ file, onRemove }: { file: File; onRemove: () => void }
     );
 }
 
-// ── Agent call picker ──────────────────────────────────────────────────────
-function AgentPicker({
-    agents,
-    allAgents,
+function ToolPicker({
+    tools,
+    selectedTool,
     onSelect,
-    onClose,
 }: {
-    agents: Agent[];
-    allAgents: Agent[];
-    onSelect: (agent: Agent) => void;
-    onClose: () => void;
+    tools: ToolItem[];
+    selectedTool: ToolItem | null;
+    onSelect: (tool: ToolItem) => void;
 }) {
-    const displayAgents = agents.length > 0 ? agents : allAgents;
-    const pickerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handle = (e: MouseEvent) => {
-            if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-                onClose();
-            }
-        };
-        document.addEventListener('mousedown', handle);
-        return () => document.removeEventListener('mousedown', handle);
-    }, [onClose]);
-
     return (
-        <div className="wbb-agent-dropdown" ref={pickerRef}>
-            <div className="wbb-agent-dropdown__title">
-                {agents.length > 0 ? 'Favoris' : 'Tous les agents'}
-            </div>
-            {displayAgents.length === 0 ? (
-                <div style={{ padding: '12px 16px', fontSize: 13, color: '#9ca3af' }}>
-                    Aucun agent disponible
-                </div>
+        <div className="wbb-tool-menu">
+            <div className="wbb-tool-menu__title">Tools Jarvis</div>
+            {tools.length === 0 ? (
+                <div className="wbb-tool-menu__empty">Aucun tool disponible</div>
             ) : (
-                displayAgents.map(agent => (
+                tools.slice(0, 8).map((tool) => (
                     <button
-                        key={agent.uuid}
-                        className="wbb-agent-dropdown__item"
-                        onClick={() => onSelect(agent)}
+                        key={tool.id}
+                        type="button"
+                        className={`wbb-tool-menu__item ${selectedTool?.id === tool.id ? 'wbb-tool-menu__item--selected' : ''}`}
+                        onClick={() => onSelect(tool)}
                     >
-                        <span className="wbb-agent-dropdown__item-name">
-                            {agent.avatar_url ? '': '🤖 '}{agent.name}
+                        <span className="wbb-tool-menu__icon">{tool.icon}</span>
+                        <span className="wbb-tool-menu__text">
+                            <span className="wbb-tool-menu__name">{tool.name}</span>
+                            <span className="wbb-tool-menu__desc">{tool.description}</span>
                         </span>
-                        {agent.description && (
-                            <span className="wbb-agent-dropdown__item-desc">{agent.description}</span>
-                        )}
                     </button>
                 ))
             )}
@@ -96,30 +75,54 @@ function AgentPicker({
 
 // ── Main component ─────────────────────────────────────────────────────────
 export default function WebBottomBar() {
-    const { sendJarvisMessage } = useJarvis();
-    const { selectedConversation, sendCallback, openConversation, navigate, replyTo, setReplyTo } = useNavigation();
-    const { favoriteAgents, myAgents } = useAgentFramework();
-    const { agentConversations } = useConversations();
-    const queryClient = useQueryClient();
+    const { sendJarvisMessage, sendJarvisInteraction } = useJarvis();
+    const { selectedConversation, sendCallback, replyTo, setReplyTo } = useNavigation();
 
     const [text, setText] = useState('');
     const [stagedFiles, setStagedFiles] = useState<File[]>([]);
-    const [selectedAgentUuid, setSelectedAgentUuid] = useState<string | null>(null);
-    const [agentPickerOpen, setAgentPickerOpen] = useState(false);
+    const [jarvisMode, setJarvisMode] = useState(false);
+    const [toolPickerOpen, setToolPickerOpen] = useState(false);
+    const [selectedTool, setSelectedTool] = useState<ToolItem | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const sendLockRef = useRef(false);
 
     const isChat = !!selectedConversation;
-    const canSend = text.trim().length > 0 || stagedFiles.length > 0;
+    const canSend = jarvisMode ? text.trim().length > 0 : text.trim().length > 0 || stagedFiles.length > 0;
+
+    const { data: tools = [] } = useQuery({
+        queryKey: ['jarvis', 'tools', 'bottom-bar'],
+        queryFn: async (): Promise<ToolItem[]> => {
+            const res = await fetchWithAuth(`${API_BASE_URL}/framework/agents/public/`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            const agents: BackendAgent[] = Array.isArray(data) ? data : data.results || [];
+            return agents.map(enrichAgent);
+        },
+        enabled: isChat && jarvisMode,
+        staleTime: 5 * 60_000,
+    });
 
     const handleSend = () => {
         if (!canSend) return;
         if (sendLockRef.current) return;
         sendLockRef.current = true;
 
-        if (isChat && sendCallback.current) {
+        if (isChat && jarvisMode && selectedConversation) {
+            void sendJarvisInteraction({
+                message: text.trim(),
+                mode: 'conversation_thread',
+                toolMode: selectedTool ? 'force' : 'auto',
+                conversationUuid: selectedConversation.uuid,
+                conversationName: selectedConversation.name,
+                conversationType: selectedConversation.conversation_type,
+                parentMessageUuid: replyTo?.uuid ?? null,
+                parentMessagePreview: replyTo ? getFirstNonEmptyLine(replyTo.content) : null,
+                preferredToolId: selectedTool?.name ?? null,
+            });
+            setReplyTo(null);
+        } else if (isChat && sendCallback.current) {
             if (stagedFiles.length > 0) {
                 sendCallback.current.sendFiles(text.trim(), stagedFiles);
             } else {
@@ -131,7 +134,8 @@ export default function WebBottomBar() {
 
         setText('');
         setStagedFiles([]);
-        setSelectedAgentUuid(null);
+        setSelectedTool(null);
+        setToolPickerOpen(false);
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
         }
@@ -164,52 +168,9 @@ export default function WebBottomBar() {
         setStagedFiles(prev => prev.filter((_, i) => i !== index));
     };
 
-    const toggleAgent = (uuid: string) => {
-        setSelectedAgentUuid(prev => prev === uuid ? null : uuid);
-    };
-
-    const handleCallAgent = async (agent: Agent) => {
-        setAgentPickerOpen(false);
-        // Find existing agent conversation
-        const existing = agentConversations.find(c =>
-            c.framework_agent?.uuid === agent.uuid ||
-            c.agent_info?.uuid === agent.uuid ||
-            (c as any).agent_uuid === agent.uuid
-        );
-        if (existing) {
-            openConversation(existing);
-            return;
-        }
-        // Create new agent conversation
-        try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/framework/agents/${agent.uuid}/start-conversation/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}),
-            });
-            if (res.ok) {
-                await queryClient.invalidateQueries({ queryKey: ['conversations', 'agents'] });
-                const listRes = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/agents/`);
-                if (listRes.ok) {
-                    const data = await listRes.json();
-                    const convs = Array.isArray(data) ? data : data.results || [];
-                    const newConv = convs.find((c: any) =>
-                        c.framework_agent?.uuid === agent.uuid ||
-                        c.agent_info?.uuid === agent.uuid
-                    );
-                    if (newConv) {
-                        openConversation({
-                            ...newConv,
-                            conversation_type: 'agent' as const,
-                            name: newConv.framework_agent?.name || agent.name || 'Agent',
-                            avatar_url: newConv.framework_agent?.avatar_url || agent.avatar_url || '',
-                        });
-                        return;
-                    }
-                }
-                navigate('agents');
-            }
-        } catch { /* silent */ }
+    const selectTool = (tool: ToolItem) => {
+        setSelectedTool((current) => current?.id === tool.id ? null : tool);
+        setToolPickerOpen(false);
     };
 
     return (
@@ -247,23 +208,18 @@ export default function WebBottomBar() {
                     </div>
                 )}
 
-                {/* Agent pills row (chat mode only) */}
-                {isChat && favoriteAgents.length > 0 && (
-                    <div className="wbb-agent-pills">
-                        {favoriteAgents.map(agent => (
-                            <button
-                                key={agent.uuid}
-                                type="button"
-                                className={`wbb-agent-pill ${selectedAgentUuid === agent.uuid ? 'wbb-agent-pill--active' : ''}`}
-                                onClick={() => toggleAgent(agent.uuid)}
-                                title={agent.description || agent.name}
-                            >
-                                🤖 {agent.name}
-                                {selectedAgentUuid === agent.uuid && (
-                                    <IoClose size={11} style={{ marginLeft: 2 }} />
-                                )}
-                            </button>
-                        ))}
+                {isChat && jarvisMode && (
+                    <div className="wbb-jarvis-mode-row">
+                        <span className="wbb-jarvis-mode-chip">
+                            <IoSparkles size={13} />
+                            Commencer un thread avec Jarvis
+                        </span>
+                        {selectedTool && (
+                            <span className="wbb-jarvis-mode-chip wbb-jarvis-mode-chip--tool">
+                                <IoConstructOutline size={13} />
+                                {selectedTool.name}
+                            </span>
+                        )}
                     </div>
                 )}
 
@@ -290,25 +246,35 @@ export default function WebBottomBar() {
                         </>
                     )}
 
-                    {/* Call agent button (chat mode only) */}
+                    {/* Jarvis/thread mode button */}
                     {isChat && (
-                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <>
                             <button
-                                className={`wbb-icon-btn ${agentPickerOpen ? 'wbb-icon-btn--active' : ''}`}
-                                title="Appeler un agent IA"
-                                onClick={() => setAgentPickerOpen(v => !v)}
+                                className={`wbb-icon-btn ${jarvisMode ? 'wbb-icon-btn--active' : ''}`}
+                                title="Demander a Jarvis dans ce fil"
+                                onClick={() => setJarvisMode(v => !v)}
                             >
                                 <IoSparkles size={18} />
                             </button>
-                            {agentPickerOpen && (
-                                <AgentPicker
-                                    agents={favoriteAgents}
-                                    allAgents={myAgents}
-                                    onSelect={handleCallAgent}
-                                    onClose={() => setAgentPickerOpen(false)}
-                                />
+                            {jarvisMode && (
+                                <div className="wbb-tool-picker-wrap">
+                                    <button
+                                        className={`wbb-icon-btn ${selectedTool || toolPickerOpen ? 'wbb-icon-btn--active' : ''}`}
+                                        title="Choisir un tool pour Jarvis"
+                                        onClick={() => setToolPickerOpen(v => !v)}
+                                    >
+                                        <IoConstructOutline size={18} />
+                                    </button>
+                                    {toolPickerOpen && (
+                                        <ToolPicker
+                                            tools={tools}
+                                            selectedTool={selectedTool}
+                                            onSelect={selectTool}
+                                        />
+                                    )}
+                                </div>
                             )}
-                        </div>
+                        </>
                     )}
 
                     {/* Input */}
@@ -317,7 +283,11 @@ export default function WebBottomBar() {
                             ref={textareaRef}
                             className="web-bottom-bar__input"
                             rows={1}
-                            placeholder={isChat ? `Message pour ${selectedConversation.name || 'Conversation'}…` : 'Demande à Jarvis…'}
+                            placeholder={isChat
+                                ? jarvisMode
+                                    ? `Demander a Jarvis dans ${selectedConversation.name || 'ce fil'}...`
+                                    : `Message pour ${selectedConversation.name || 'Conversation'}...`
+                                : 'Demande a Jarvis...'}
                             value={text}
                             onChange={handleTextChange}
                             onKeyDown={handleKeyDown}
