@@ -2,7 +2,10 @@
 // Uses relative URLs so Vite's dev proxy can forward to the production backend
 // In production build, this should be replaced with the actual API URL
 
-const isDevServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+// Use Vite's environment flag instead of checking the hostname: development
+// previews may be served through a forwarded Codespaces domain rather than
+// localhost, and still need the same-origin Vite proxy to avoid CORS issues.
+const isDevServer = import.meta.env.DEV;
 
 export const API_BASE_URL = isDevServer ? '' : 'https://reseausocial-production.up.railway.app';
 

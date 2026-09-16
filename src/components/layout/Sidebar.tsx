@@ -60,10 +60,6 @@ export default function Sidebar({ activePage, onNavigate, panelContent, panelWid
             >
                 {/* Icon rail */}
                 <nav className="sidebar__rail">
-                    <div className="sidebar__logo">
-                        <span className="sidebar__logo-text">E</span>
-                    </div>
-
                     <div className="sidebar__nav-items">
                         {NAV_ITEMS.map((item) => {
                             const isActive = activePage === item.id;

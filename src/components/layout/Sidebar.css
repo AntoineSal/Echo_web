@@ -1,23 +1,19 @@
 .sidebar {
     display: flex;
     flex-direction: row;
-    height: calc(100% - 24px);
-    z-index: 100;
+    height: 100%;
+    flex-shrink: 0;
+    z-index: 1;
     position: relative;
-    margin: 12px 12px 12px 12px;
 }
 
-/* ── Unified green container (rail + panel together) ── */
+/* ── The rail and its panel form the app's neutral background layer ── */
 .sidebar__green-body {
     display: flex;
     flex-direction: row;
-    background: var(--emerald-bg);
+    background: transparent;
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
-    border-radius: 32px;
-    box-shadow:
-        0 8px 32px rgba(67, 180, 146, 0.25),
-        0 2px 8px rgba(0, 0, 0, 0.06);
     overflow: hidden;
     height: 100%;
     position: relative;
@@ -26,26 +22,18 @@
     transition:
         width var(--transition-smooth),
         transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
-        box-shadow 280ms ease,
         filter 280ms ease;
 }
 
 .sidebar__green-body::before {
     content: '';
     position: absolute;
-    inset: 1px;
-    border-radius: 31px;
+    inset: 0;
     background:
-        radial-gradient(circle at top left, rgba(255, 255, 255, 0.2), transparent 38%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 38%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(230, 230, 230, 0.08));
     pointer-events: none;
     z-index: 0;
-}
-
-.sidebar__green-body--open {
-    box-shadow:
-        0 16px 42px rgba(67, 180, 146, 0.22),
-        0 6px 18px rgba(10, 40, 34, 0.08);
 }
 
 .sidebar__green-body--resizing {
@@ -72,25 +60,6 @@
     position: relative;
 }
 
-.sidebar__logo {
-    width: 38px;
-    height: 38px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 16px;
-    flex-shrink: 0;
-}
-
-.sidebar__logo-text {
-    color: #fff;
-    font-size: 20px;
-    font-weight: 800;
-    line-height: 1;
-}
-
 .sidebar__nav-items {
     display: flex;
     flex-direction: column;
@@ -107,20 +76,20 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(255, 255, 255, 0.65);
+    color: #7b817d;
     transition: all var(--transition-fast);
     background: transparent;
 }
 
 .sidebar__nav-btn:hover {
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.62);
+    color: #4b5563;
 }
 
 .sidebar__nav-btn--active {
-    background: rgba(255, 255, 255, 0.22);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.82);
+    color: #374151;
+    box-shadow: 0 2px 8px rgba(55, 65, 81, 0.09);
 }
 
 .sidebar__nav-icon {
@@ -147,7 +116,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* ── Panel inside the green body ── */
+/* ── Panel inside the background layer ── */
 .sidebar__panel {
     width: 0;
     overflow: hidden;
@@ -156,7 +125,7 @@
         opacity 220ms ease,
         transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
         border-color 220ms ease;
-    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    border-left: 1px solid rgba(31, 41, 55, 0.05);
     opacity: 0;
     transform: translateX(-10px) scaleX(0.985);
     transform-origin: left center;
@@ -180,7 +149,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: 16px 14px;
-    color: rgba(255, 255, 255, 0.95);
+    color: #374151;
     transition:
         opacity 180ms ease,
         transform 220ms ease;
@@ -193,43 +162,43 @@
     pointer-events: none;
 }
 
-/* Panel content overrides for white-on-green */
+/* Panel content overrides for the mobile light background */
 .sidebar__panel-content h3,
 .sidebar__panel-content .conversations-panel__title {
-    color: rgba(255, 255, 255, 0.95);
-    border-bottom-color: rgba(255, 255, 255, 0.15);
+    color: #374151;
+    border-bottom-color: rgba(31, 41, 55, 0.06);
 }
 
 .sidebar__panel-content .conversations-panel__square {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.58);
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
 }
 
 .sidebar__panel-content .conversations-panel__square:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.86);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 .sidebar__panel-content .conversations-panel__avatar {
-    background: rgba(255, 255, 255, 0.25);
-    color: #fff;
+    background: rgba(230, 230, 230, 1);
+    color: #374151;
 }
 
 .sidebar__panel-content .conversations-panel__name {
-    color: rgba(255, 255, 255, 0.9);
+    color: #374151;
 }
 
 .sidebar__panel-content .conversations-panel__badge {
-    background: rgba(255, 255, 255, 0.9);
-    color: rgba(10, 145, 104, 1);
+    background: #6b7280;
+    color: #fff;
 }
 
 .sidebar__panel-content .placeholder-page__title {
-    color: rgba(255, 255, 255, 0.95);
+    color: #374151;
 }
 
 .sidebar__panel-content .placeholder-page__desc {
-    color: rgba(255, 255, 255, 0.7);
+    color: #777;
 }
 
 /* Hide scrollbar entirely */
@@ -245,22 +214,22 @@
     gap: 4px;
     margin-top: auto;
     padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-top: 1px solid rgba(31, 41, 55, 0.06);
 }
 
 .sidebar__user-avatar {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.82);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 14px;
     font-weight: 700;
-    color: #fff;
+    color: #374151;
     overflow: hidden;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.72);
 }
 
 .sidebar__user-avatar-img {

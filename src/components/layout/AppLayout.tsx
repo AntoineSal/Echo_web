@@ -1,13 +1,6 @@
-import { useState, useCallback } from 'react';
 import Sidebar, { type PageId } from './Sidebar';
-import SidebarResizer from './SidebarResizer';
 import WebBottomBar from './WebBottomBar';
-import {
-  SIDEBAR_PANEL_MIN_WIDTH,
-  SIDEBAR_PANEL_MAX_WIDTH,
-  SIDEBAR_PANEL_DEFAULT_WIDTH,
-  SIDEBAR_PANEL_SNAP_WIDTHS,
-} from '../../styles/theme';
+import { SIDEBAR_PANEL_DEFAULT_WIDTH } from '../../styles/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import './AppLayout.css';
@@ -20,8 +13,6 @@ interface AppLayoutProps {
 const PAGES_WITH_PANEL: PageId[] = ['conversations', 'groups', 'agents', 'add-friend', 'add-group', 'add-agent'];
 
 export default function AppLayout({ children, panelContent }: AppLayoutProps) {
-  const [panelWidth, setPanelWidth] = useState(SIDEBAR_PANEL_DEFAULT_WIDTH);
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const { user, isLoggedIn, logout } = useAuth();
   const { currentPage, navigate } = useNavigation();
 
@@ -37,21 +28,23 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
           activePage={currentPage}
           onNavigate={navigate}
           panelContent={isPanelOpen ? panelContent(currentPage) : null}
-          panelWidth={panelWidth}
+          panelWidth={SIDEBAR_PANEL_DEFAULT_WIDTH}
           isPanelOpen={isPanelOpen}
-          isResizing={isResizingSidebar}
+          isResizing={false}
           userPhoto={userPhoto}
           userName={userName}
           isLoggedIn={isLoggedIn}
           onLogout={logout}
         />
 
-        <main className="app-layout__main">
-          {children(currentPage)}
-        </main>
-      </div>
+        <div className={`app-layout__foreground ${isPanelOpen ? 'app-layout__foreground--panel-open' : ''}`}>
+          <main className={`app-layout__main ${currentPage === 'home' ? 'app-layout__main--home' : ''}`}>
+            {children(currentPage)}
+          </main>
 
-      <WebBottomBar />
+          <WebBottomBar />
+        </div>
+      </div>
     </div>
   );
 }

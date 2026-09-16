@@ -1,361 +1,102 @@
-import { useCallback } from 'react';
+import { useMemo, useState } from 'react';
 import {
-    IoSparklesOutline, IoCheckmarkCircleOutline,
-    IoChatbubbleEllipsesOutline, IoPersonAddOutline,
-    IoPeopleOutline, IoCalendarOutline,
-    IoCloseOutline, IoCheckmarkOutline,
+    IoArrowForward, IoCalendarOutline, IoClose, IoDocumentTextOutline,
+    IoImageOutline, IoMailOutline, IoMusicalNotesOutline, IoPartlySunnyOutline,
+    IoPlanetOutline, IoSearchOutline, IoWalkOutline,
 } from 'react-icons/io5';
-import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { useConversations } from '../hooks/useConversations';
-import { useNotificationsSummary, type MessageSummary } from '../hooks/useNotificationsSummary';
-import { useJarvisSuggestions, type JarvisSuggestion } from '../hooks/useJarvisSuggestions';
-import { useFriendRequests } from '../hooks/useFriendRequests';
-import { useGroupInvitations } from '../hooks/useGroupInvitations';
 import { useJarvis } from '../contexts/JarvisContext';
-import { useNavigation } from '../contexts/NavigationContext';
-import { fetchWithAuth } from '@mobile/services/apiClient';
-import { API_BASE_URL } from '@mobile/config/api';
 import { AgentContentRenderer } from '../components/conversations/AgentContentRenderer';
-import { renderFormattedText } from '../components/conversations/richText';
-import { syncConversationsByType } from '../services/localSync';
+import jarvisLogo from '@mobile/assets/images/logo-watermark.png';
 import './HomePage.css';
 
-// Map suggestion icon names to actual components
-const ICON_MAP: Record<string, React.ReactNode> = {
-    IoChatbubbleEllipsesOutline: <IoChatbubbleEllipsesOutline size={20} />,
-    IoPersonAddOutline: <IoPersonAddOutline size={20} />,
-    IoPeopleOutline: <IoPeopleOutline size={20} />,
-    IoCalendarOutline: <IoCalendarOutline size={20} />,
-    IoSparklesOutline: <IoSparklesOutline size={20} />,
-};
+interface HomeSuggestion {
+    id: string;
+    keyword: string;
+    icon: React.ReactNode;
+    completions: string[];
+}
+
+const WELCOME_MESSAGES = [
+    'Content de vous retrouver.', 'Bon retour parmi vos conversations.',
+    'Bonjour, tout est prêt pour reprendre tranquillement.', 'Bienvenue, {name}.',
+    'Ravi de vous revoir, {name}.', 'Vos échanges importants vous attendent.',
+    'Installez-vous, on reprend là où vous en étiez.', 'Un nouveau passage sur Echo, au calme.',
+    'Bonjour {name}, vos conversations sont prêtes.', 'Tout est en place pour continuer.',
+];
+
+const SUGGESTIONS: HomeSuggestion[] = [
+    { id: 'gmail', keyword: 'Gmail', icon: <IoMailOutline />, completions: ['Résume mes derniers mails reçus sur Gmail', 'Rédige un brouillon sur mon Gmail pour demander un rendez-vous', 'Rédige une réponse professionnelle au dernier mail important', 'Prépare un brouillon Gmail de relance polie pour un dossier en attente'] },
+    { id: 'playlist', keyword: 'Playlist', icon: <IoMusicalNotesOutline />, completions: ['Crée une playlist Spotify pour une soirée dans une ambiance house et solaire', 'Crée une playlist Spotify pour un moment chill entre amis', 'Crée une playlist Spotify pour travailler sans paroles agressives', 'Crée une playlist Spotify adaptée à mes goûts pour courir 45 minutes'] },
+    { id: 'strava', keyword: 'Course', icon: <IoWalkOutline />, completions: ['Crée une course Strava de 5 km pour demain matin', 'Crée un entraînement Strava progressif pour reprendre la course', 'Planifie une sortie Strava de 10 km avec un objectif d’allure régulier', 'Ajoute une course Strava facile pour ce week-end'] },
+    { id: 'nasa', keyword: 'NASA', icon: <IoPlanetOutline />, completions: ['Récupère l’image NASA du jour et explique-moi ce qu’on voit', 'Trouve une image NASA liée à Mars et donne-moi son lien', 'Récupère une photo spatiale impressionnante et prépare un message pour la partager'] },
+    { id: 'agenda', keyword: 'Agenda', icon: <IoCalendarOutline />, completions: ['Crée un événement dans mon agenda pour déjeuner avec Paul vendredi', 'Trouve un créneau libre cette semaine pour appeler ma famille', 'Ajoute un rappel demain matin pour préparer ma réunion', 'Planifie ma semaine avec mes rendez-vous importants'] },
+    { id: 'notion', keyword: 'Notion', icon: <IoDocumentTextOutline />, completions: ['Crée une page Notion avec le plan de mon prochain projet', 'Ajoute dans Notion un résumé structuré de mes idées du jour', 'Transforme cette liste en tâches Notion avec priorités'] },
+    { id: 'image', keyword: 'Image', icon: <IoImageOutline />, completions: ['Génère une image pour annoncer une soirée entre amis', 'Crée une image de couverture pour une playlist chill', 'Génère un visuel minimaliste pour présenter mon projet'] },
+    { id: 'web', keyword: 'Cherche', icon: <IoSearchOutline />, completions: ['Cherche les meilleurs restaurants ouverts ce soir près de moi', 'Compare les prix actuels pour ce produit et donne-moi le meilleur lien', 'Trouve trois sources fiables sur ce sujet et résume-les'] },
+    { id: 'meteo', keyword: 'Météo', icon: <IoPartlySunnyOutline />, completions: ['Regarde la météo de demain et propose-moi une tenue adaptée', 'Vérifie s’il va pleuvoir avant ma sortie running', 'Préviens-moi si la météo change pour mon trajet de ce soir'] },
+];
+
+const stableIndex = (value: string, length: number) =>
+    [...value].reduce((sum, char) => sum + char.charCodeAt(0), 0) % length;
 
 export default function HomePage() {
-    const { user, isLoggedIn } = useAuth();
-    const queryClient = useQueryClient();
-    const { privateConversations, groupConversations, agentConversations } = useConversations();
-    const { summaries, loading, dismissSummary } = useNotificationsSummary();
-    const { friendRequests, updateFriendRequest } = useFriendRequests();
-    const { groupInvitations, updateGroupInvitation } = useGroupInvitations();
-    const jarvisSuggestions = useJarvisSuggestions(summaries);
-    const { liveTurns, clearLiveTurns, removeLiveTurn } = useJarvis();
-    const { openConversation } = useNavigation();
+    const { user } = useAuth();
+    const { liveTurns, clearLiveTurns, setComposerText, focusComposer } = useJarvis();
+    const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
+    const identity = user?.uuid || user?.username || 'echo';
+    const firstName = (user?.first_name || user?.username || '').trim().split(/\s+/)[0];
+    const welcomeMessage = WELCOME_MESSAGES[stableIndex(identity, WELCOME_MESSAGES.length)]
+        .replace(/\{name\}/g, firstName).replace(/\s+,/g, ',');
+    const visibleSuggestions = useMemo(() => {
+        const offset = stableIndex(identity, SUGGESTIONS.length);
+        return Array.from({ length: 5 }, (_, index) => SUGGESTIONS[(offset + index) % SUGGESTIONS.length]);
+    }, [identity]);
+    const activeSuggestion = SUGGESTIONS.find(item => item.id === activeSuggestionId) ?? null;
+    const latestTurn = liveTurns.at(-1) ?? null;
+    const previousTurns = liveTurns.slice(0, -1);
 
-    const allConversations = [...privateConversations, ...groupConversations, ...agentConversations];
-
-    const handleOpenConversation = useCallback((conversationUuid: string | null) => {
-        if (!conversationUuid) return;
-        const conv = allConversations.find(c => c.uuid === conversationUuid);
-        if (conv) openConversation(conv);
-    }, [allConversations, openConversation]);
-
-    const totalUnread = [...privateConversations, ...groupConversations, ...agentConversations]
-        .reduce((sum, c) => sum + (c.unread_count || 0), 0);
-
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 6) return 'Bonne nuit';
-        if (hour < 12) return 'Bonjour';
-        if (hour < 18) return 'Bon après-midi';
-        return 'Bonsoir';
+    const chooseCompletion = (text: string) => {
+        setComposerText(text);
+        setActiveSuggestionId(null);
+        focusComposer();
     };
 
-    const displayName = user?.username || user?.first_name || 'Utilisateur';
-    const photoUrl = user?.photo_profil_url || user?.photo_profil || null;
-
-    // ── Friend request handlers ──
-    const handleAcceptFriend = useCallback(async (requestId: number, demandeurUuid: string) => {
-        try {
-            const response = await fetchWithAuth(
-                `${API_BASE_URL}/relations/connections/${requestId}/`,
-                { method: 'PATCH', body: JSON.stringify({ statut: 'acceptee' }) }
-            );
-            if (response.ok) {
-                updateFriendRequest(requestId, 'accept');
-                // Create conversation
-                await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ recipient_uuid: demandeurUuid }),
-                });
-            }
-        } catch (error) {
-            console.error('Error accepting friend request', error);
-        }
-    }, [updateFriendRequest]);
-
-    const handleDeclineFriend = useCallback(async (requestId: number) => {
-        try {
-            const response = await fetchWithAuth(
-                `${API_BASE_URL}/relations/connections/${requestId}/`,
-                { method: 'PATCH', body: JSON.stringify({ statut: 'refusee' }) }
-            );
-            if (response.ok) updateFriendRequest(requestId, 'reject');
-        } catch (error) {
-            console.error('Error declining friend request', error);
-        }
-    }, [updateFriendRequest]);
-
-    // ── Group invitation handlers ──
-    const handleAcceptGroup = useCallback(async (uuid: string) => {
-        try {
-            const response = await fetchWithAuth(
-                `${API_BASE_URL}/groups/invitations/${uuid}/respond/`,
-                { method: 'POST', body: JSON.stringify({ action: 'accept' }) }
-            );
-            if (response.ok) {
-                updateGroupInvitation(uuid);
-                // Sync group conversations immediately so the new group appears without delay
-                if (user?.uuid) {
-                    syncConversationsByType(user.uuid, 'group').then(() => {
-                        queryClient.invalidateQueries({ queryKey: ['conversations', 'groups'] });
-                    }).catch(console.error);
-                }
-            }
-        } catch (error) {
-            console.error('Error accepting group invitation', error);
-        }
-    }, [updateGroupInvitation, user?.uuid, queryClient]);
-
-    const handleDeclineGroup = useCallback(async (uuid: string) => {
-        try {
-            const response = await fetchWithAuth(
-                `${API_BASE_URL}/groups/invitations/${uuid}/respond/`,
-                { method: 'POST', body: JSON.stringify({ action: 'decline' }) }
-            );
-            if (response.ok) updateGroupInvitation(uuid);
-        } catch (error) {
-            console.error('Error declining group invitation', error);
-        }
-    }, [updateGroupInvitation]);
-
-    const hasPendingCards = friendRequests.length > 0 || groupInvitations.length > 0;
-
     return (
-        <div className="home-page">
-            <div className="home-page__main-column">
-                {/* ═══ SECTION 1: HERO CARD ═══ */}
-                <div className="home-page__hero">
-                    <div className="home-page__hero-blob home-page__hero-blob--a" />
-                    <div className="home-page__hero-blob home-page__hero-blob--b" />
-                    <div className="home-page__hero-content">
-                        <div className="home-page__avatar-placeholder">
-                            {photoUrl ? (
-                                <img src={photoUrl} alt={displayName} className="home-page__avatar-img" />
-                            ) : (
-                                displayName.charAt(0).toUpperCase()
-                            )}
-                        </div>
-                        <div className="home-page__hero-text">
-                            <span className="home-page__hello">{getGreeting()},</span>
-                            <span className="home-page__name">{displayName}</span>
-                            {totalUnread > 0 ? (
-                                <span className="home-page__subtitle">
-                                    {totalUnread} message{totalUnread > 1 ? 's' : ''} non lu{totalUnread > 1 ? 's' : ''}
-                                </span>
-                            ) : (
-                                <span className="home-page__subtitle">Tout est sous contrôle.</span>
-                            )}
-                        </div>
+        <section className={`home-page ${latestTurn ? 'home-page--with-jarvis' : ''}`}>
+            {!latestTurn && <div className="home-page__welcome">
+                <img className="home-page__welcome-logo" src={jarvisLogo} alt="" />
+                <p className="home-page__welcome-text">{welcomeMessage}</p>
+            </div>}
+
+            {latestTurn && <article className="home-page__jarvis-panel">
+                <header className="home-page__jarvis-header">
+                    <span className="home-page__jarvis-title">Jarvis</span>
+                    <button type="button" className="home-page__jarvis-close" onClick={clearLiveTurns} aria-label="Fermer la conversation Jarvis"><IoClose size={20} /></button>
+                </header>
+                {previousTurns.map(turn => <div className="home-page__turn home-page__turn--previous" key={turn.id}>
+                    <div className="home-page__user-row"><div className="home-page__user-bubble">{turn.userMessage}</div></div>
+                    <div className="home-page__jarvis-response">{turn.isProcessing ? 'Analyse en cours…' : <AgentContentRenderer content={turn.jarvisResponse} />}</div>
+                </div>)}
+                <div className="home-page__turn home-page__turn--current">
+                    {latestTurn.userMessage && <div className="home-page__user-row"><div className="home-page__user-bubble">{latestTurn.userMessage}</div></div>}
+                    <div className={`home-page__jarvis-response ${latestTurn.isProcessing ? 'home-page__jarvis-response--processing' : ''}`}>
+                        {latestTurn.isProcessing ? <><span className="home-page__processing-dot" /> Analyse en cours…</> : <AgentContentRenderer content={latestTurn.jarvisResponse} />}
                     </div>
                 </div>
+            </article>}
 
-
-                {/* ═══ SECTION 3: FRIEND REQUEST CARDS ═══ */}
-                {friendRequests.length > 0 && friendRequests.map((request) => {
-                    const name = request.demandeur_info.surnom || request.demandeur_info.username;
-                    return (
-                        <div key={request.id} className="home-page__compact-card">
-                            <div className="home-page__compact-row">
-                                <div className="home-page__compact-avatar">
-                                    {request.demandeur_info.photo_profil_url ? (
-                                        <img
-                                            src={request.demandeur_info.photo_profil_url}
-                                            alt={name}
-                                            className="home-page__compact-avatar-img"
-                                        />
-                                    ) : (
-                                        <span>{name.charAt(0).toUpperCase()}</span>
-                                    )}
-                                </div>
-                                <div className="home-page__compact-info">
-                                    <p className="home-page__compact-title">
-                                        <strong>{name}</strong> veut être votre ami.
-                                    </p>
-                                </div>
-                                <div className="home-page__compact-actions">
-                                    <button
-                                        className="home-page__icon-btn home-page__icon-btn--decline"
-                                        onClick={() => handleDeclineFriend(request.id)}
-                                        title="Refuser"
-                                    >
-                                        <IoCloseOutline size={22} />
-                                    </button>
-                                    <button
-                                        className="home-page__icon-btn home-page__icon-btn--accept"
-                                        onClick={() => handleAcceptFriend(request.id, request.demandeur_info.uuid)}
-                                        title="Accepter"
-                                    >
-                                        <IoCheckmarkOutline size={22} />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-
-                {/* ═══ SECTION 4: GROUP INVITATION CARDS ═══ */}
-                {groupInvitations.length > 0 && groupInvitations.map((invitation) => {
-                    const inviterName = invitation.created_by?.surnom || invitation.created_by?.username || 'Utilisateur';
-                    return (
-                        <div key={invitation.uuid} className="home-page__compact-card">
-                            <div className="home-page__compact-row">
-                                <div className="home-page__compact-avatar home-page__compact-avatar--group">
-                                    <IoPeopleOutline size={22} />
-                                </div>
-                                <div className="home-page__compact-info">
-                                    <p className="home-page__compact-title">
-                                        <strong>{invitation.group.name}</strong>
-                                    </p>
-                                    <p className="home-page__compact-subtitle">
-                                        Invitation de <strong>{inviterName}</strong>
-                                    </p>
-                                </div>
-                                <div className="home-page__compact-actions">
-                                    <button
-                                        className="home-page__icon-btn home-page__icon-btn--decline"
-                                        onClick={() => handleDeclineGroup(invitation.uuid)}
-                                        title="Refuser"
-                                    >
-                                        <IoCloseOutline size={22} />
-                                    </button>
-                                    <button
-                                        className="home-page__icon-btn home-page__icon-btn--accept"
-                                        onClick={() => handleAcceptGroup(invitation.uuid)}
-                                        title="Accepter"
-                                    >
-                                        <IoCheckmarkOutline size={22} />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-
-                {/* ═══ JARVIS LIVE TURNS ═══ */}
-                {liveTurns.map((turn) => (
-                    <div key={turn.id} className="home-page__summary-card home-page__jarvis-voice-card">
-                        <button
-                            className="home-page__summary-dismiss"
-                            onClick={() => removeLiveTurn(turn.id)}
-                            title="Fermer"
-                        >
-                            <IoCloseOutline size={14} />
-                        </button>
-                        <div className="home-page__summary-body">
-                            <div className="home-page__jarvis-badge">
-                                <IoSparklesOutline size={12} color="rgba(10, 145, 104, 1)" />
-                                <span className="home-page__jarvis-badge-text">Jarvis</span>
-                            </div>
-                            <div className="home-page__jarvis-content">
-                                <div className="home-page__jarvis-user-msg">
-                                    <span className="home-page__jarvis-user-text">
-                                        « {renderFormattedText(turn.userMessage, `jarvis-user-${turn.id}`, {
-                                            textClassName: 'home-page__jarvis-user-text',
-                                            linkClassName: 'home-page__jarvis-user-link',
-                                            inlineCodeClassName: 'home-page__jarvis-inline-code home-page__jarvis-inline-code--user',
-                                            codeBlockClassName: 'home-page__jarvis-code-block home-page__jarvis-code-block--user',
-                                            headingClassName: 'home-page__jarvis-heading',
-                                            headingToneClassName: 'home-page__jarvis-heading--user',
-                                        })} »
-                                    </span>
-                                </div>
-                                <div className="home-page__jarvis-response">
-                                    {turn.isProcessing ? (
-                                        <span className="home-page__jarvis-processing">Jarvis réfléchit...</span>
-                                    ) : (
-                                        <div className="home-page__jarvis-response-text">
-                                            <AgentContentRenderer content={turn.jarvisResponse} />
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-
-                {/* ═══ SECTION 5: JARVIS AI NOTIFICATION SUMMARIES ═══ */}
-                {loading && (
-                    <div className="home-page__loading">
-                        <div className="home-page__spinner" />
-                        <p>Chargement des résumés...</p>
-                    </div>
-                )}
-
-                {!loading && summaries.length === 0 && !hasPendingCards && (
-                    <div className="home-page__empty">
-                        <IoCheckmarkCircleOutline size={48} color="rgba(10, 145, 104, 0.4)" />
-                        <h2 className="home-page__empty-title">Tout est à jour !</h2>
-                        <p className="home-page__empty-text">
-                            Vous n'avez aucune notification pour le moment.
-                        </p>
-                    </div>
-                )}
-
-                {!loading && summaries.map((item: MessageSummary) => (
-                    <div key={item.id} className="home-page__summary-card">
-                        {item.conversationUuid && (
-                            <button
-                                className="home-page__summary-dismiss"
-                                onClick={() => dismissSummary(item.id)}
-                                title="Masquer"
-                            >
-                                <IoCloseOutline size={14} />
-                            </button>
-                        )}
-                        <button
-                            className="home-page__summary-body"
-                            onClick={() => handleOpenConversation(item.conversationUuid ?? null)}
-                            disabled={!item.conversationUuid}
-                        >
-                            <span className="home-page__summary-sender">{item.sender}</span>
-                            <span className="home-page__summary-message">{item.message}</span>
-                        </button>
-                    </div>
-                ))}
-            </div>
-
-            {/* ═══ JARVIS SUGGESTIONS (Right Sidebar) ═══ */}
-            {jarvisSuggestions.length > 0 && isLoggedIn && (
-                <div className="home-page__sidebar-column">
-                    <div className="home-page__suggestions">
-                        <h3 className="home-page__section-title">
-                            <IoSparklesOutline size={16} /> Suggestions de Jarvis
-                        </h3>
-                        <div className="home-page__suggestions-list">
-                            {jarvisSuggestions.map((s: JarvisSuggestion) => (
-                                <button
-                                    key={s.id}
-                                    className="home-page__suggestion-chip"
-                                    onClick={() => {
-                                        if (s.action.type === 'navigate_conversation' && s.action.conversationUuid) {
-                                            handleOpenConversation(s.action.conversationUuid);
-                                        }
-                                    }}
-                                >
-                                    <span
-                                        className="home-page__suggestion-icon"
-                                        style={{ backgroundColor: s.color + '15', color: s.color }}
-                                    >
-                                        {ICON_MAP[s.iconName] || <IoSparklesOutline size={20} />}
-                                    </span>
-                                    <span className="home-page__suggestion-text">{s.title}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+            {activeSuggestion ? <div className="home-page__completions">
+                <button type="button" className="home-page__completions-dismiss" onClick={() => setActiveSuggestionId(null)} aria-label="Fermer les suggestions" />
+                <div className="home-page__completions-list">{activeSuggestion.completions.map(completion =>
+                    <button type="button" className="home-page__completion" key={completion} onClick={() => chooseCompletion(completion)}>
+                        <span>{completion}</span><IoArrowForward size={16} />
+                    </button>)}</div>
+            </div> : !latestTurn && <div className="home-page__suggestions" aria-label="Suggestions Jarvis">
+                {visibleSuggestions.map(suggestion => <button type="button" className="home-page__suggestion" key={suggestion.id} onClick={() => setActiveSuggestionId(suggestion.id)}>
+                    <span className="home-page__suggestion-icon">{suggestion.icon}</span><span>{suggestion.keyword}</span>
+                </button>)}
+            </div>}
+        </section>
     );
 }

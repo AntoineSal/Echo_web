@@ -18,6 +18,10 @@ export interface JarvisLiveTurn {
 
 interface JarvisContextType {
     liveTurns: JarvisLiveTurn[];
+    composerText: string;
+    composerFocusKey: number;
+    setComposerText: (text: string) => void;
+    focusComposer: () => void;
     sendJarvisMessage: (message: string) => Promise<void>;
     sendJarvisInteraction: (request: JarvisInteractionRequest) => Promise<void>;
     getLocalConversationMessages: (conversationUuid: string | null) => Message[];
@@ -31,6 +35,8 @@ const JarvisContext = createContext<JarvisContextType | undefined>(undefined);
 export function JarvisProvider({ children }: { children: React.ReactNode }) {
     const { isLoggedIn, user } = useAuth();
     const [liveTurns, setLiveTurns] = useState<JarvisLiveTurn[]>([]);
+    const [composerText, setComposerText] = useState('');
+    const [composerFocusKey, setComposerFocusKey] = useState(0);
     const [localMessagesByConversation, setLocalMessagesByConversation] = useState<Record<string, Message[]>>({});
 
     const upsertLiveTurn = useCallback((turn: JarvisLiveTurn) => {
@@ -49,6 +55,10 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
     const removeLiveTurn = useCallback((id: string) => {
         setLiveTurns(prev => prev.filter(turn => turn.id !== id));
+    }, []);
+
+    const focusComposer = useCallback(() => {
+        setComposerFocusKey(key => key + 1);
     }, []);
 
     const sendJarvisMessage = useCallback(async (message: string) => {
@@ -192,6 +202,10 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     return (
         <JarvisContext.Provider value={{
             liveTurns,
+            composerText,
+            composerFocusKey,
+            setComposerText,
+            focusComposer,
             sendJarvisMessage,
             sendJarvisInteraction,
             getLocalConversationMessages,

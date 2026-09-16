@@ -1,11 +1,12 @@
-import React, { useRef, useState } from 'react';
-import { IoSend, IoSparkles, IoAttach, IoClose, IoArrowUndoOutline, IoConstructOutline } from 'react-icons/io5';
+import React, { useEffect, useRef, useState } from 'react';
+import { IoSend, IoSparkles, IoAdd, IoMic, IoClose, IoArrowUndoOutline, IoConstructOutline } from 'react-icons/io5';
 import { useQuery } from '@tanstack/react-query';
 import { useJarvis } from '../../contexts/JarvisContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
 import { enrichAgent, type BackendAgent, type ToolItem } from '../../data/toolsCatalog';
+import aiWatermark from '@mobile/assets/images/logo-watermark.png';
 import './WebBottomBar.css';
 
 const getFirstNonEmptyLine = (text?: string): string => {
@@ -75,7 +76,13 @@ function ToolPicker({
 
 // ── Main component ─────────────────────────────────────────────────────────
 export default function WebBottomBar() {
-    const { sendJarvisMessage, sendJarvisInteraction } = useJarvis();
+    const {
+        sendJarvisMessage,
+        sendJarvisInteraction,
+        composerText,
+        composerFocusKey,
+        setComposerText,
+    } = useJarvis();
     const { selectedConversation, sendCallback, replyTo, setReplyTo } = useNavigation();
 
     const [text, setText] = useState('');
@@ -89,7 +96,8 @@ export default function WebBottomBar() {
     const sendLockRef = useRef(false);
 
     const isChat = !!selectedConversation;
-    const canSend = jarvisMode ? text.trim().length > 0 : text.trim().length > 0 || stagedFiles.length > 0;
+    const effectiveText = isChat ? text : composerText;
+    const canSend = jarvisMode ? effectiveText.trim().length > 0 : effectiveText.trim().length > 0 || stagedFiles.length > 0;
 
     const { data: tools = [] } = useQuery({
         queryKey: ['jarvis', 'tools', 'bottom-bar'],
@@ -104,6 +112,10 @@ export default function WebBottomBar() {
         staleTime: 5 * 60_000,
     });
 
+    useEffect(() => {
+        if (!isChat && composerFocusKey > 0) textareaRef.current?.focus();
+    }, [composerFocusKey, isChat]);
+
     const handleSend = () => {
         if (!canSend) return;
         if (sendLockRef.current) return;
@@ -111,7 +123,7 @@ export default function WebBottomBar() {
 
         if (isChat && jarvisMode && selectedConversation) {
             void sendJarvisInteraction({
-                message: text.trim(),
+                message: effectiveText.trim(),
                 mode: 'conversation_thread',
                 toolMode: selectedTool ? 'force' : 'auto',
                 conversationUuid: selectedConversation.uuid,
@@ -124,15 +136,16 @@ export default function WebBottomBar() {
             setReplyTo(null);
         } else if (isChat && sendCallback.current) {
             if (stagedFiles.length > 0) {
-                sendCallback.current.sendFiles(text.trim(), stagedFiles);
+                sendCallback.current.sendFiles(effectiveText.trim(), stagedFiles);
             } else {
-                sendCallback.current.sendText(text.trim());
+                sendCallback.current.sendText(effectiveText.trim());
             }
         } else if (!isChat) {
-            if (text.trim()) sendJarvisMessage(text.trim());
+            if (effectiveText.trim()) sendJarvisMessage(effectiveText.trim());
         }
 
-        setText('');
+        if (isChat) setText('');
+        if (!isChat) setComposerText('');
         setStagedFiles([]);
         setSelectedTool(null);
         setToolPickerOpen(false);
@@ -153,9 +166,10 @@ export default function WebBottomBar() {
     };
 
     const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setText(e.target.value);
+        if (isChat) setText(e.target.value);
+        else setComposerText(e.target.value);
         e.target.style.height = 'auto';
-        e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+        e.target.style.height = Math.min(e.target.scrollHeight, 242) + 'px';
     };
 
     const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -225,25 +239,23 @@ export default function WebBottomBar() {
 
                 {/* Main input row */}
                 <div className="web-bottom-bar__row">
-                    {/* Attachment button (chat only) */}
+                    {/* Mobile-style leading action. Attachments are currently sent in chats. */}
+                    <button
+                        className="wbb-icon-btn"
+                        title={isChat ? 'Joindre un fichier' : 'Ajouter'}
+                        onClick={() => isChat && fileInputRef.current?.click()}
+                    >
+                        <IoAdd size={20} />
+                    </button>
                     {isChat && (
-                        <>
-                            <button
-                                className="wbb-icon-btn"
-                                title="Joindre un fichier"
-                                onClick={() => fileInputRef.current?.click()}
-                            >
-                                <IoAttach size={20} />
-                            </button>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                multiple
-                                accept="image/*,video/*,.pdf,.doc,.docx,.txt"
-                                style={{ display: 'none' }}
-                                onChange={handleFilePick}
-                            />
-                        </>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+                            style={{ display: 'none' }}
+                            onChange={handleFilePick}
+                        />
                     )}
 
                     {/* Jarvis/thread mode button */}
@@ -254,7 +266,11 @@ export default function WebBottomBar() {
                                 title="Demander a Jarvis dans ce fil"
                                 onClick={() => setJarvisMode(v => !v)}
                             >
-                                <IoSparkles size={18} />
+                                <img
+                                    src={aiWatermark}
+                                    alt=""
+                                    className="wbb-ai-watermark"
+                                />
                             </button>
                             {jarvisMode && (
                                 <div className="wbb-tool-picker-wrap">
@@ -285,10 +301,10 @@ export default function WebBottomBar() {
                             rows={1}
                             placeholder={isChat
                                 ? jarvisMode
-                                    ? `Demander a Jarvis dans ${selectedConversation.name || 'ce fil'}...`
-                                    : `Message pour ${selectedConversation.name || 'Conversation'}...`
-                                : 'Demande a Jarvis...'}
-                            value={text}
+                                    ? 'Parler à Jarvis'
+                                    : `Message pour ${selectedConversation.name || 'Conversation'}`
+                                : 'Parler à Jarvis'}
+                            value={effectiveText}
                             onChange={handleTextChange}
                             onKeyDown={handleKeyDown}
                         />
@@ -296,8 +312,9 @@ export default function WebBottomBar() {
                             className={`web-bottom-bar__send ${canSend ? 'web-bottom-bar__send--active' : ''}`}
                             onClick={handleSend}
                             disabled={!canSend}
+                            aria-label={canSend ? 'Envoyer' : 'Message vocal'}
                         >
-                            <IoSend size={16} />
+                            {canSend ? <IoSend size={24} /> : <IoMic size={24} />}
                         </button>
                     </div>
                 </div>
