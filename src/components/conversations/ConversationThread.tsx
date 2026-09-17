@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMessages, type Message } from '../../hooks/useMessages';
 import { useWebSocketMessages } from '../../hooks/useWebSocketMessages';
-import { useNavigation } from '../../contexts/NavigationContext';
+import { useNavigation, type ReplyTarget } from '../../contexts/NavigationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useJarvis } from '../../contexts/JarvisContext';
 import { MessageBubble, USER_COLORS } from './MessageBubble';
@@ -9,7 +9,7 @@ import { AgentContentRenderer } from './AgentContentRenderer';
 import { normalizeAgentRenderPayload, normalizeRawAgentContentText } from '../../utils/agentRenderPayload';
 import { buildMessageReactionContent, extractReactionMapFromMessages, isReactionEventMessage } from '../../utils/messageReactions';
 import { isSystemMessage } from '../../utils/messageHelpers';
-import { IoChevronBack, IoChevronDown, IoChevronUp, IoChatbubbleOutline, IoSend, IoSparkles } from 'react-icons/io5';
+import { IoChevronBack, IoChevronForward, IoChevronDown, IoChevronUp, IoSparkles } from 'react-icons/io5';
 import './ConversationThread.css';
 
 interface ConversationThreadProps {
@@ -97,97 +97,64 @@ function getContentPreview(content: string): string {
     return firstLine?.trim() ?? '';
 }
 
-function getFirstNonEmptyLineForThread(content?: string): string {
-    if (!content) return 'Message Jarvis';
-    return content.split('\n').map(line => line.trim()).find(Boolean) || 'Message Jarvis';
-}
-
 // ── Agent message card ─────────────────────────────────────────────────────
 interface AgentCardProps {
     msg: Message;
     threadMessages: Message[];
     isAutoExpanded: boolean;
-    conversationAvatar?: string;
-    onThreadSend: (text: string, parentUuid: string, parentPreview: string) => Promise<void>;
+    isAgentConversation: boolean;
+    onReply: (target: ReplyTarget) => void;
 }
 
-function AgentCard({ msg, threadMessages, isAutoExpanded, conversationAvatar, onThreadSend }: AgentCardProps) {
+function AgentCard({ msg, threadMessages, isAutoExpanded, isAgentConversation, onReply }: AgentCardProps) {
     const { user } = useAuth();
     const [expanded, setExpanded] = useState(isAutoExpanded);
-    const [draft, setDraft] = useState('');
-    const [isSending, setIsSending] = useState(false);
     const agentName = resolveAgentName(msg);
     const preview = getContentPreview(msg.content ?? '');
-    const firstThreadPrompt = threadMessages.find((threadMessage) => !isAgentMessage(threadMessage))?.content;
-    const headerPrompt = msg.jarvis_prompt || firstThreadPrompt || preview;
+    const firstVisibleThreadMessage = threadMessages[0] ?? null;
+    const firstThreadPrompt = firstVisibleThreadMessage?.content;
+    const headerPrompt = firstThreadPrompt || msg.jarvis_prompt || preview;
+    const firstThreadMessageIsMine = !!firstVisibleThreadMessage && (
+        firstVisibleThreadMessage.sender_uuid && user?.uuid
+            ? firstVisibleThreadMessage.sender_uuid === user.uuid
+            : firstVisibleThreadMessage.sender_username === user?.username
+    );
+    const isConversationMarker = msg.content?.trim().startsWith('💬 Conversation avec');
 
-    const formattedTime = msg.created_at
-        ? new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-        : '';
-    const canSend = draft.trim().length > 0 && !isSending;
-
-    const handleThreadSubmit = async () => {
-        if (!canSend) return;
-        const value = draft.trim();
-        setDraft('');
-        setIsSending(true);
-        try {
-            await onThreadSend(value, msg.uuid, preview || getFirstNonEmptyLineForThread(msg.content));
-            setExpanded(true);
-        } finally {
-            setIsSending(false);
-        }
-    };
-
-    const handleThreadKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            void handleThreadSubmit();
-        }
-    };
+    if (isAgentConversation) {
+        return (
+            <div className="agent-conversation-message">
+                {msg.isPending ? (
+                    <div className="agent-conversation-message__thinking">
+                        <span className="agent-conversation-message__spinner" />
+                        <span>Agent en cours de réflexion...</span>
+                    </div>
+                ) : (
+                    <AgentContentRenderer content={msg.content} />
+                )}
+            </div>
+        );
+    }
 
     return (
-        <div className={`agent-card ${expanded ? 'agent-card--expanded' : ''}`}>
+        <div className={`agent-card agent-card--mobile ${expanded ? 'agent-card--expanded' : ''}`}>
 
             {/* ── Header (always visible) ──────────────────────────────── */}
             <button
                 type="button"
-                className="agent-card__header"
+                className={`agent-card__mobile-toggle ${firstThreadMessageIsMine ? 'agent-card__mobile-toggle--left' : ''}`}
                 onClick={() => setExpanded(v => !v)}
                 aria-expanded={expanded}
+                aria-label={expanded ? 'Replier le panneau agent' : 'Déplier le panneau agent'}
             >
-                <div className="agent-card__header-left">
-                    {/* Avatar */}
-                    {conversationAvatar ? (
-                        <img src={conversationAvatar} alt={agentName} className="agent-card__avatar" />
-                    ) : (
-                        <div className="agent-card__avatar-placeholder">
-                            <IoSparkles size={16} color="rgba(10,145,104,0.9)" />
-                        </div>
-                    )}
-
-                    {/* Name + preview */}
-                    <div className="agent-card__header-text">
-                        <span className="agent-card__name">{agentName}</span>
-                        {!expanded && headerPrompt && (
-                            <span className="agent-card__preview">{headerPrompt}</span>
-                        )}
-                    </div>
-                </div>
-
-                <div className="agent-card__header-right">
-                    {threadMessages.length > 0 && (
-                        <span className="agent-card__reply-count">
-                            <IoChatbubbleOutline size={12} />
-                            {threadMessages.length}
-                        </span>
-                    )}
-                    <span className="agent-card__time">{formattedTime}</span>
-                    <span className="agent-card__chevron">
-                        {expanded ? <IoChevronUp size={16} /> : <IoChevronDown size={16} />}
-                    </span>
-                </div>
+                {expanded ? <IoChevronUp size={24} /> : <IoChevronDown size={24} />}
             </button>
+
+            {!expanded && (
+                <button type="button" className="agent-card__mobile-preview" onClick={() => setExpanded(true)}>
+                    {headerPrompt || `Discussion avec ${agentName}`}
+                </button>
+            )}
 
             {/* ── Expandable body ──────────────────────────────────────── */}
             {expanded && (
@@ -197,21 +164,22 @@ function AgentCard({ msg, threadMessages, isAutoExpanded, conversationAvatar, on
                 <div className="agent-card__body-divider" />
 
                 {/* Agent response content */}
-                {msg.content ? (
+                {msg.isPending ? (
+                    <div className="agent-conversation-message__thinking">
+                        <span className="agent-conversation-message__spinner" />
+                        <span>Agent en cours de réflexion...</span>
+                    </div>
+                ) : msg.content && !isConversationMarker ? (
                     <div className="agent-card__content">
                         <AgentContentRenderer content={msg.content} />
                     </div>
-                ) : (
+                ) : threadMessages.length === 0 ? (
                     <p className="agent-card__empty">Aucun contenu</p>
-                )}
+                ) : null}
 
                 {/* Thread replies */}
                 {threadMessages.length > 0 && (
                     <div className="agent-card__thread">
-                        <div className="agent-card__thread-label">
-                            <IoChatbubbleOutline size={13} />
-                            <span>{threadMessages.length} réponse{threadMessages.length > 1 ? 's' : ''}</span>
-                        </div>
                         <div className="agent-card__thread-messages">
                             {threadMessages.map((tmsg) => {
                                 const isAgentMsg = !!(tmsg.is_ai_generated || tmsg.framework_agent_uuid || tmsg.ai_agent_uuid);
@@ -240,25 +208,18 @@ function AgentCard({ msg, threadMessages, isAutoExpanded, conversationAvatar, on
                     </div>
                 )}
 
-                <div className="agent-card__thread-input">
-                    <input
-                        className="agent-card__thread-input-field"
-                        value={draft}
-                        onChange={(event) => setDraft(event.target.value)}
-                        onKeyDown={handleThreadKeyDown}
-                        placeholder="Repondre a Jarvis dans ce fil..."
-                        disabled={isSending}
-                    />
-                    <button
-                        type="button"
-                        className={`agent-card__thread-send ${canSend ? 'active' : ''}`}
-                        onClick={() => void handleThreadSubmit()}
-                        disabled={!canSend}
-                        title="Envoyer a Jarvis"
-                    >
-                        <IoSend size={14} />
-                    </button>
-                </div>
+                <button
+                    type="button"
+                    className="agent-card__mobile-reply"
+                    onClick={() => onReply({
+                        uuid: msg.uuid,
+                        sender_username: agentName,
+                        content: 'Discussion avec agent IA',
+                        isAgentThread: true,
+                    })}
+                >
+                    Répondre
+                </button>
 
             </div>
             )}
@@ -275,10 +236,17 @@ export function ConversationThread({
 }: ConversationThreadProps) {
     const { user } = useAuth();
     const { messages, isLoading, isFetchingMore, hasMore, loadMore, sendMessage, markAsRead } = useMessages(conversationId);
-    const { getLocalConversationMessages, sendJarvisInteraction } = useJarvis();
+    const { getLocalConversationMessages } = useJarvis();
     const localJarvisMessages = getLocalConversationMessages(conversationId);
     const { isConnected } = useWebSocketMessages(conversationId);
-    const { closeConversation, registerSendCallback, openConversationManagement, replyTo, setReplyTo } = useNavigation();
+    const {
+        registerSendCallback,
+        openConversationManagement,
+        replyTo,
+        setReplyTo,
+        isSidebarPanelOpen,
+        toggleSidebarPanel,
+    } = useNavigation();
     const replyToRef = useRef(replyTo);
 
     const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -777,31 +745,24 @@ export function ConversationThread({
         setReplyTo({ uuid: msg.uuid, sender_username: msg.sender_username, content: msg.content, attachments: msg.attachments });
     }, [setReplyTo]);
 
-    const handleJarvisThreadSend = useCallback(async (text: string, parentUuid: string, parentPreview: string) => {
-        await sendJarvisInteraction({
-            message: text,
-            mode: 'conversation_thread',
-            toolMode: 'auto',
-            conversationUuid: conversationId,
-            conversationName,
-            conversationType,
-            parentMessageUuid: parentUuid,
-            parentMessagePreview: parentPreview,
-            includeLocalUserMessage: true,
-            jarvisThreadRootUuid: parentUuid,
-        });
-    }, [conversationId, conversationName, conversationType, sendJarvisInteraction]);
-
     const showStatusDot = isConnected && (isAgentConversation || conversationType === 'direct');
 
     return (
         <div className="conversation-thread">
-            {/* Floating pill header */}
+            {/* Mobile-style split header bubbles */}
             <div className="thread-header">
-                <button type="button" className="thread-back-btn" onClick={closeConversation} title="Retour">
-                    <IoChevronBack size={22} color="rgba(60,60,60,0.9)" />
+                <button
+                    type="button"
+                    className="thread-back-btn"
+                    onClick={toggleSidebarPanel}
+                    title={isSidebarPanelOpen ? 'Fermer la liste' : 'Ouvrir la liste'}
+                    aria-label={isSidebarPanelOpen ? 'Fermer la liste des conversations' : 'Ouvrir la liste des conversations'}
+                >
+                    {isSidebarPanelOpen
+                        ? <IoChevronBack size={22} />
+                        : <IoChevronForward size={22} />}
                 </button>
-                <div className="thread-header-info" onClick={openConversationManagement} style={{ cursor: 'pointer' }}>
+                <button type="button" className="thread-header-info" onClick={openConversationManagement}>
                     {conversationAvatar ? (
                         <img src={conversationAvatar} alt={conversationName} className="thread-header-avatar" />
                     ) : (
@@ -813,7 +774,7 @@ export function ConversationThread({
                         {conversationName}
                     </span>
                     {showStatusDot && <span className="thread-status-dot" />}
-                </div>
+                </button>
             </div>
 
             {!!stickyDayLabel && (
@@ -866,8 +827,8 @@ export function ConversationThread({
                                         msg={msg}
                                         threadMessages={threadMessages}
                                         isAutoExpanded={isAgentConversation}
-                                        conversationAvatar={conversationAvatar}
-                                        onThreadSend={handleJarvisThreadSend}
+                                        isAgentConversation={isAgentConversation}
+                                        onReply={setReplyTo}
                                     />
                                 </div>
                             );
@@ -932,7 +893,7 @@ export function ConversationThread({
                                     <div className="thread-day-separator">
                                         <span
                                             ref={(element) => registerDaySeparatorElement(dayKey, element)}
-                                            className={`thread-day-separator__label${stickyDayKey === dayKey && stickyDayDocked ? ' thread-day-separator__label--parked' : ''}`}
+                                            className="thread-day-separator__label"
                                         >
                                             {formatDaySeparator(msg.created_at)}
                                         </span>

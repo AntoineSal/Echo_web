@@ -13,13 +13,16 @@ export interface ReplyTarget {
     sender_username: string;
     content: string;
     attachments?: { file_type: string }[];
+    isAgentThread?: boolean;
 }
 
 interface NavigationContextType {
     currentPage: PageId;
     selectedConversation: Conversation | null;
     conversationView: 'thread' | 'management';
+    isSidebarPanelOpen: boolean;
     navigate: (page: PageId) => void;
+    toggleSidebarPanel: () => void;
     openConversation: (conv: Conversation) => void;
     closeConversation: () => void;
     openConversationManagement: () => void;
@@ -46,6 +49,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
     const [currentPage, setCurrentPage] = useState<PageId>('home');
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
     const [conversationView, setConversationView] = useState<'thread' | 'management'>('thread');
+    const [isSidebarPanelOpen, setIsSidebarPanelOpen] = useState(false);
     const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
     const sendCallbackRef = useRef<ChatSendCallback | null>(null);
 
@@ -53,6 +57,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
 
     const navigate = useCallback((page: PageId) => {
         setCurrentPage(page);
+        setIsSidebarPanelOpen(CONV_PAGES.has(page));
         setConversationView('thread');
         setSelectedConversation(prev => {
             if (!prev) return prev;
@@ -71,7 +76,12 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
         setSelectedConversation(conv);
         setConversationView('thread');
         setCurrentPage(CONV_TYPE_TO_PAGE[conv.conversation_type] ?? 'conversations');
+        setIsSidebarPanelOpen(true);
         setReplyTo(null);
+    }, []);
+
+    const toggleSidebarPanel = useCallback(() => {
+        setIsSidebarPanelOpen(open => !open);
     }, []);
 
     const closeConversation = useCallback(() => {
@@ -98,7 +108,9 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
             currentPage,
             selectedConversation,
             conversationView,
+            isSidebarPanelOpen,
             navigate,
+            toggleSidebarPanel,
             openConversation,
             closeConversation,
             openConversationManagement,

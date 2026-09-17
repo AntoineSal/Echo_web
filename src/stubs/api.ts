@@ -9,8 +9,10 @@ const isDevServer = import.meta.env.DEV;
 
 export const API_BASE_URL = isDevServer ? '' : 'https://reseausocial-production.up.railway.app';
 
+const devWebSocketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
 export const WS_BASE_URL = isDevServer
-    ? `ws://${window.location.host}`
+    ? `${devWebSocketProtocol}//${window.location.host}`
     : 'wss://reseausocial-production.up.railway.app';
 
 export const getApiUrl = (endpoint: string): string => {

@@ -3,17 +3,21 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 /* ── Search bar — mirrors mobile SearchBar style ── */
 .conv-panel__search-wrap {
-  position: relative;
-  margin: 12px 10px 10px;
-  flex-shrink: 0;
+  position: absolute;
+  top: 12px;
+  left: 10px;
+  right: 10px;
+  z-index: 20;
+  margin: 0;
   display: flex;
   align-items: center;
   height: 40px;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.96);
   border-radius: 20px;
   box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
   padding: 0 12px;
@@ -52,28 +56,33 @@
 
 /* ── Scrollable grid area ── */
 .conv-panel__grid-scroll {
-  flex: 1;
+  width: 100%;
+  height: 100%;
   overflow-y: auto;
-  padding: 4px 8px 16px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(75, 85, 99, 0.3) transparent;
+  overflow-x: hidden;
+  padding: 66px 8px 42px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 88px,
+    #000 calc(100% - 34px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 88px,
+    #000 calc(100% - 34px),
+    transparent 100%
+  );
 }
 
 .conv-panel__grid-scroll::-webkit-scrollbar {
-  width: 4px;
-}
-
-.conv-panel__grid-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.conv-panel__grid-scroll::-webkit-scrollbar-thumb {
-  background: rgba(75, 85, 99, 0.3);
-  border-radius: 4px;
-}
-
-.conv-panel__grid-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(75, 85, 99, 0.55);
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* ── Grid of squares — fixed 80px regardless of panel width ── */
@@ -84,9 +93,28 @@
   padding: 4px 2px;
 }
 
-.conv-panel__grid--private {
-  grid-template-columns: repeat(3, 80px);
+.conv-panel__grid--private,
+.conv-panel--agents .conv-panel__grid {
+  grid-template-columns: 80px;
   justify-content: center;
+  row-gap: 30px;
+  padding-top: 6px;
+  padding-bottom: 24px;
+}
+
+.conv-panel--private .conv-panel__search-wrap {
+  left: 0;
+  right: 0;
+  padding: 0 10px;
+}
+
+.conv-panel--private .conv-panel__search-icon {
+  margin-right: 5px;
+}
+
+.conv-panel--private .conv-panel__grid-scroll {
+  padding-right: 0;
+  padding-left: 0;
 }
 
 /* ── Conversation square — mirrors mobile ConversationSquare ── */
@@ -113,6 +141,59 @@
 
 .conv-square:active {
   transform: scale(0.97);
+}
+
+/* All conversation types use the current mobile tile: image, then name below. */
+.conv-panel .conv-square {
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: 18px;
+  background: #e6e6e6;
+  box-shadow: none;
+}
+
+.conv-panel .conv-square__avatar,
+.conv-panel .conv-square__avatar-placeholder {
+  opacity: 0.94;
+  border: 0;
+}
+
+.conv-panel .conv-square::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.conv-panel .conv-square__name-badge {
+  bottom: -19px;
+  left: -8px;
+  right: -8px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.conv-panel .conv-square__name {
+  width: 100%;
+  color: #333;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.conv-panel .conv-square--unread {
+  border: 2px solid rgba(10, 145, 104, 0.4);
+  box-shadow: none;
+}
+
+.conv-panel .conv-square--selected {
+  border-color: rgba(75, 85, 99, 0.48);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.72);
 }
 
 /* Unread — green glow border (matches mobile unreadConversationSquare) */
@@ -269,11 +350,13 @@
 .conv-panel__group-row-block {
   display: flex;
   flex-direction: column;
+  margin-bottom: 30px;
 }
 
 .conv-panel__grid--groups-row {
   display: grid;
-  grid-template-columns: repeat(3, 80px);
+  grid-template-columns: 80px;
+  justify-content: center;
   gap: 10px;
   padding: 4px 0;
 }
@@ -294,7 +377,8 @@
 
 .conv-panel__grid--subgroups {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 72px);
+  grid-template-columns: 72px;
+  justify-content: center;
   gap: 8px;
 }
 

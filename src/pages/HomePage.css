@@ -2,17 +2,17 @@
 .home-page__welcome { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 44px; pointer-events: none; }
 .home-page__welcome-logo { width: 56px; height: 56px; object-fit: contain; opacity: 0.92; filter: brightness(0) saturate(100%) invert(41%) sepia(76%) saturate(868%) hue-rotate(116deg) brightness(83%) contrast(95%); }
 .home-page__welcome-text { max-width: 300px; margin-top: 5px; color: #666; font-size: 14px; line-height: 20px; font-weight: 500; font-style: italic; text-align: center; }
-.home-page__suggestions { position: absolute; left: 20%; right: 20%; bottom: 8px; z-index: 12; display: flex; justify-content: center; gap: 10px; overflow-x: auto; padding: 6px 0; scrollbar-width: none; }
+.home-page__suggestions { position: absolute; left: 20%; right: 20%; bottom: 88px; z-index: 12; display: flex; justify-content: center; gap: 10px; overflow-x: auto; padding: 6px 0; scrollbar-width: none; }
 .home-page__suggestions::-webkit-scrollbar { display: none; }
 .home-page__suggestion { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 10px 17px; border: 1px solid rgba(255,255,255,.52); border-radius: 14px; background: #e6e6e6; color: #333; font-size: 14px; font-weight: 600; transition: background 150ms ease, transform 150ms ease; }
 .home-page__suggestion:hover { background: #dedede; transform: translateY(-1px); }
 .home-page__suggestion-icon { display: flex; color: #7b817d; font-size: 17px; }
 .home-page__completions { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; justify-content: flex-end; background: linear-gradient(to bottom, transparent 45%, rgba(242,242,242,.96) 72%, #f2f2f2 100%); }
 .home-page__completions-dismiss { flex: 1; width: 100%; cursor: default; }
-.home-page__completions-list { width: min(60vw, 100%); margin: 0 auto; padding: 0 20px 8px; border-top: 1px solid rgba(255,255,255,.52); }
+.home-page__completions-list { width: min(60vw, 100%); margin: 0 auto; padding: 0 20px 88px; border-top: 1px solid rgba(255,255,255,.52); }
 .home-page__completion { width: 100%; min-height: 51px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 2px; border-bottom: 1px solid rgba(255,255,255,.52); color: #333; font-size: 15px; line-height: 20px; font-weight: 500; text-align: left; }
 .home-page__completion svg { flex: 0 0 auto; color: rgba(55,65,81,.48); }
-.home-page--with-jarvis { overflow-y: auto; padding: 32px max(24px, calc((100% - 760px) / 2)) 24px; }
+.home-page--with-jarvis { overflow-y: auto; padding: 32px max(24px, calc((100% - 760px) / 2)) 112px; }
 .home-page__jarvis-panel { width: 100%; padding: 18px; border: 1px solid rgba(255,255,255,.52); border-radius: 24px; background: rgba(255,255,255,.58); box-shadow: 0 2px 6px rgba(0,0,0,.04); overflow: hidden; }
 .home-page__jarvis-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .home-page__jarvis-title { color: #333; font-size: 16px; font-weight: 600; }

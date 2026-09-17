@@ -25,7 +25,7 @@
     z-index: 10;
     margin: 0;
     overflow: hidden;
-    border-radius: 0;
+    border-radius: 28px 0 0 28px;
     background: #f2f2f2;
     box-shadow: -2px 0 6px rgba(0, 0, 0, 0.1);
     transition:
@@ -51,5 +51,9 @@
 }
 
 .app-layout__main--home {
+    padding: 0;
+}
+
+.app-layout__main--conversation {
     padding: 0;
 }

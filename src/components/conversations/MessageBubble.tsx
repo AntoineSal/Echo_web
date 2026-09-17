@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { IoCheckmark, IoCheckmarkDone, IoChevronDown, IoChevronUp, IoTimeOutline, IoWarningOutline } from 'react-icons/io5';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { IoCheckmark, IoCheckmarkDone, IoChevronDown, IoChevronUp, IoDocumentTextOutline, IoTimeOutline, IoWarningOutline } from 'react-icons/io5';
 import type { Message, InteractiveMessageData, FormField } from '../../hooks/useMessages';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchWithAuth } from '@mobile/services/apiClient';
@@ -119,9 +119,71 @@ function buildAttachmentKey(messageUuid: string, attachment: NonNullable<Message
     return `${messageUuid}-${attachment.uuid || attachment.file_url || attachment.thumbnail_url || attachment.original_filename || 'attachment'}-${index}`;
 }
 
+type MessageAttachment = NonNullable<Message['attachments']>[number];
+type RawMessageAttachment = MessageAttachment & {
+    type?: string;
+    content_type?: string;
+    mime_type?: string;
+    mime?: string;
+    url?: string;
+    download_url?: string;
+    file?: string;
+    preview_url?: string;
+    thumbnail?: string;
+    file_name?: string;
+    filename?: string;
+    name?: string;
+};
+
+function getAttachmentUrl(attachment: MessageAttachment): string {
+    const raw = attachment as RawMessageAttachment;
+    return attachment.file_url || raw.url || raw.download_url || raw.file || '';
+}
+
+function getAttachmentThumbnailUrl(attachment: MessageAttachment): string {
+    const raw = attachment as RawMessageAttachment;
+    return attachment.thumbnail_url || raw.thumbnail || raw.preview_url || '';
+}
+
+function getAttachmentName(attachment: MessageAttachment): string {
+    const raw = attachment as RawMessageAttachment;
+    const explicitName = attachment.original_filename || raw.file_name || raw.filename || raw.name;
+    if (explicitName) return explicitName;
+    const url = getAttachmentUrl(attachment);
+    try {
+        const pathname = new URL(url, window.location.origin).pathname;
+        const candidate = decodeURIComponent(pathname.split('/').filter(Boolean).pop() || '');
+        return candidate && candidate.includes('.') ? candidate : 'Fichier';
+    } catch {
+        return 'Fichier';
+    }
+}
+
+function getAttachmentRawType(attachment: MessageAttachment): string {
+    const raw = attachment as RawMessageAttachment;
+    return String(attachment.file_type || raw.type || raw.content_type || raw.mime_type || raw.mime || '').toLowerCase();
+}
+
+function getAttachmentKind(attachment: MessageAttachment): 'image' | 'video' | 'audio' | 'document' {
+    const rawType = getAttachmentRawType(attachment);
+    const fileIdentity = `${getAttachmentName(attachment)} ${getAttachmentUrl(attachment)}`
+        .split(/[?#]/, 1)[0]
+        .toLowerCase();
+
+    if (rawType.includes('video') || /\.(mp4|mov|m4v|webm|avi|mkv)$/i.test(fileIdentity)) return 'video';
+    if (rawType.includes('audio') || rawType.includes('voice') || /\.(mp3|m4a|aac|wav|ogg|opus)$/i.test(fileIdentity)) return 'audio';
+    if (
+        rawType.includes('image') ||
+        rawType.includes('photo') ||
+        /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i.test(fileIdentity) ||
+        (!!getAttachmentThumbnailUrl(attachment) && !rawType.includes('document') && !rawType.includes('pdf'))
+    ) return 'image';
+    return 'document';
+}
+
 function resolveAttachmentImageUrl(attachment: NonNullable<Message['attachments']>[number]): string {
-    const thumbnailUrl = attachment.thumbnail_url || '';
-    const fileUrl = attachment.file_url || '';
+    const thumbnailUrl = getAttachmentThumbnailUrl(attachment);
+    const fileUrl = getAttachmentUrl(attachment);
 
     if (thumbnailUrl && !isFailedAssetUrl(thumbnailUrl)) {
         return thumbnailUrl;
@@ -134,12 +196,12 @@ function resolveAttachmentImageUrl(attachment: NonNullable<Message['attachments'
     return '';
 }
 
-function renderImageAttachment(attachment: NonNullable<Message['attachments']>[number]): React.ReactNode {
+function ImageAttachment({ attachment }: { attachment: MessageAttachment }) {
     const initialImageUrl = resolveAttachmentImageUrl(attachment);
     if (!initialImageUrl) {
         return (
-            <a href={attachment.file_url} target="_blank" rel="noopener noreferrer" className="attachment-file">
-                📎 {attachment.original_filename || 'Image'}
+            <a href={getAttachmentUrl(attachment)} target="_blank" rel="noopener noreferrer" className="attachment-file">
+                📎 {getAttachmentName(attachment)}
             </a>
         );
     }
@@ -154,21 +216,146 @@ function renderImageAttachment(attachment: NonNullable<Message['attachments']>[n
                 markFailedAssetUrl(image.currentSrc || image.src);
 
                 if (
-                    attachment.thumbnail_url &&
-                    image.currentSrc !== attachment.file_url &&
-                    image.src !== attachment.file_url &&
-                    attachment.file_url &&
-                    !isFailedAssetUrl(attachment.file_url)
+                    getAttachmentThumbnailUrl(attachment) &&
+                    image.currentSrc !== getAttachmentUrl(attachment) &&
+                    image.src !== getAttachmentUrl(attachment) &&
+                    getAttachmentUrl(attachment) &&
+                    !isFailedAssetUrl(getAttachmentUrl(attachment))
                 ) {
-                    image.src = attachment.file_url;
+                    image.src = getAttachmentUrl(attachment);
                     return;
                 }
 
                 image.style.display = 'none';
             }}
-            onClick={() => window.open(attachment.file_url, '_blank')}
+            onClick={() => window.open(getAttachmentUrl(attachment), '_blank')}
             style={{ cursor: 'pointer' }}
         />
+    );
+}
+
+function ImageAttachmentGrid({ attachments, messageUuid }: { attachments: MessageAttachment[]; messageUuid: string }) {
+    const visibleImages = attachments.slice(0, 4);
+    const remainingCount = Math.max(0, attachments.length - visibleImages.length);
+
+    return (
+        <div className={`attachment-image-grid attachment-image-grid--${visibleImages.length}`}>
+            {visibleImages.map((attachment, index) => {
+                const imageUrl = resolveAttachmentImageUrl(attachment);
+                return (
+                    <button
+                        type="button"
+                        key={buildAttachmentKey(messageUuid, attachment, index)}
+                        className={`attachment-image-grid__cell attachment-image-grid__cell--${index + 1}`}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            window.open(getAttachmentUrl(attachment), '_blank');
+                        }}
+                        aria-label={`Ouvrir la photo ${index + 1}`}
+                    >
+                        {imageUrl ? <img src={imageUrl} alt="" className="attachment-image-grid__photo" /> : <span>📎</span>}
+                        {index === 3 && remainingCount > 0 && (
+                            <span className="attachment-image-grid__more">+{remainingCount}</span>
+                        )}
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
+function FileAttachment({ attachment }: { attachment: MessageAttachment }) {
+    const fileUrl = getAttachmentUrl(attachment);
+    const fileName = getAttachmentName(attachment);
+    const [preview, setPreview] = useState<string | null>(null);
+    const extension = fileName.split('.').pop()?.toLowerCase() || '';
+    const isTextFile = ['txt', 'md', 'json', 'csv', 'log', 'js', 'ts', 'jsx', 'tsx', 'html', 'xml', 'css'].includes(extension);
+
+    useEffect(() => {
+        if (!isTextFile || !fileUrl) return;
+        const controller = new AbortController();
+        void fetch(fileUrl, { headers: { Range: 'bytes=0-1000' }, signal: controller.signal })
+            .then(response => response.ok ? response.text() : '')
+            .then(text => {
+                const cleanText = text.replace(/[\r\n]+/g, ' ').trim();
+                if (cleanText) setPreview(`${cleanText.slice(0, 150)}${cleanText.length > 150 ? '…' : ''}`);
+            })
+            .catch(() => undefined);
+        return () => controller.abort();
+    }, [fileUrl, isTextFile]);
+
+    return (
+        <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="attachment-file-card">
+            <span className="attachment-file-card__row">
+                <span className="attachment-file-card__icon"><IoDocumentTextOutline size={24} /></span>
+                <span className="attachment-file-card__name">{fileName}</span>
+            </span>
+            {preview && <span className="attachment-file-card__preview">{preview}</span>}
+        </a>
+    );
+}
+
+function AdaptiveFileAttachment({ attachment }: { attachment: MessageAttachment }) {
+    const candidateUrl = resolveAttachmentImageUrl(attachment) || getAttachmentUrl(attachment);
+    const [isImage, setIsImage] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        if (!candidateUrl) {
+            setIsImage(false);
+            return;
+        }
+        let active = true;
+        const probe = new Image();
+        probe.onload = () => { if (active) setIsImage(true); };
+        probe.onerror = () => { if (active) setIsImage(false); };
+        probe.src = candidateUrl;
+        return () => { active = false; };
+    }, [candidateUrl]);
+
+    if (isImage) return <ImageAttachment attachment={attachment} />;
+    return <FileAttachment attachment={attachment} />;
+}
+
+const URL_PATTERN = /((?:https?:\/\/|www\.)[^\s]+)/i;
+
+function WebLinkPreview({ content }: { content: string }) {
+    const rawUrl = useMemo(() => content.match(URL_PATTERN)?.[1]?.replace(/[),.;!?]+$/, '') || '', [content]);
+    const href = rawUrl.startsWith('www.') ? `https://${rawUrl}` : rawUrl;
+    const [metadata, setMetadata] = useState<{ title?: string; description?: string; image?: string } | null>(null);
+    const host = useMemo(() => {
+        try { return new URL(href).hostname.replace(/^www\./, ''); } catch { return ''; }
+    }, [href]);
+
+    useEffect(() => {
+        if (!href) return;
+        const controller = new AbortController();
+        void fetch(href, { signal: controller.signal })
+            .then(response => response.ok ? response.text() : '')
+            .then(html => {
+                if (!html) return;
+                const documentNode = new DOMParser().parseFromString(html, 'text/html');
+                const value = (property: string) => documentNode.querySelector(`meta[property="${property}"], meta[name="${property}"]`)?.getAttribute('content') || undefined;
+                const image = value('og:image');
+                setMetadata({
+                    title: value('og:title') || documentNode.title || undefined,
+                    description: value('og:description') || value('description'),
+                    image: image ? new URL(image, href).href : undefined,
+                });
+            })
+            .catch(() => undefined);
+        return () => controller.abort();
+    }, [href]);
+
+    if (!href) return null;
+    return (
+        <a href={href} target="_blank" rel="noopener noreferrer" className="message-link-preview" onClick={event => event.stopPropagation()}>
+            {metadata?.image && <img src={metadata.image} alt="" className="message-link-preview__image" />}
+            <span className="message-link-preview__body">
+                <span className="message-link-preview__host">{host}</span>
+                <span className="message-link-preview__title">{metadata?.title || rawUrl}</span>
+                {metadata?.description && <span className="message-link-preview__description">{metadata.description}</span>}
+            </span>
+        </a>
     );
 }
 
@@ -414,6 +601,13 @@ function MessageBubbleComponent({
     });
 
     const attachments = message.attachments ?? [];
+    const imageAttachments = attachments.filter((attachment) => getAttachmentKind(attachment) === 'image');
+    const nonImageAttachments = attachments.filter((attachment) => getAttachmentKind(attachment) !== 'image');
+    const hasAttachmentCaption = !!message.content?.trim()
+        && (!attachments.some(attachment => getAttachmentKind(attachment) === 'audio') || message.content.trim() !== 'Message vocal');
+    if (attachments.length > 0 && !attachments.every(attachment => getAttachmentKind(attachment) === 'audio')) {
+        bubbleClasses.push('message-bubble--attachments');
+    }
     const isInteractive = message.interactive_data?.is_interactive === true
         && !message.interactive_data?.hidden_meta?.is_form_response;
     const hasExpandedReplyDetails = replyAncestry.length > 0 || replySiblingMessages.length > 0;
@@ -524,22 +718,27 @@ function MessageBubbleComponent({
 
                         {attachments.length > 0 && (
                             <div className="attachment-stack">
-                                {attachments.map((att, index) => (
+                                {imageAttachments.length > 1 && (
+                                    <ImageAttachmentGrid attachments={imageAttachments} messageUuid={message.uuid} />
+                                )}
+                                {(imageAttachments.length > 1 ? nonImageAttachments : attachments).map((att, index) => (
                                     <div key={buildAttachmentKey(message.uuid, att, index)} className="attachment-item">
-                                        {att.file_type === 'image' ? (
-                                            renderImageAttachment(att)
-                                        ) : att.file_type === 'audio' ? (
-                                            <AudioAttachment url={att.file_url} isMe={!!isMe} />
-                                        ) : att.file_type === 'video' ? (
-                                            <VideoAttachment url={att.file_url} thumbnailUrl={att.thumbnail_url} />
+                                        {getAttachmentKind(att) === 'image' ? (
+                                            <ImageAttachment attachment={att} />
+                                        ) : getAttachmentKind(att) === 'audio' ? (
+                                            <AudioAttachment url={getAttachmentUrl(att)} isMe={!!isMe} />
+                                        ) : getAttachmentKind(att) === 'video' ? (
+                                            <VideoAttachment url={getAttachmentUrl(att)} thumbnailUrl={getAttachmentThumbnailUrl(att)} />
                                         ) : (
-                                            <a href={att.file_url} target="_blank" rel="noopener noreferrer"
-                                               className="attachment-file">
-                                                📎 {att.original_filename || 'Fichier'}
-                                            </a>
+                                            <AdaptiveFileAttachment attachment={att} />
                                         )}
                                     </div>
                                 ))}
+                                {hasAttachmentCaption && (
+                                    <div className={`attachment-caption ${isMe ? 'attachment-caption--mine' : 'attachment-caption--theirs'}`}>
+                                        {renderContent(message.content)}
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -547,8 +746,9 @@ function MessageBubbleComponent({
                             <InteractiveForm data={message.interactive_data} messageUuid={message.uuid} isMe={!!isMe} />
                         )}
 
-                        {message.content && (!attachments.some(a => a.file_type === 'audio') || message.content.trim() !== 'Message vocal') && (
+                        {message.content && attachments.length === 0 && (
                             <div className={`message-text ${isMe ? 'my-message-text' : 'their-message-text'}`}>
+                                <WebLinkPreview content={message.content} />
                                 {renderContent(message.content)}
                             </div>
                         )}

@@ -2,10 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useConversations, type Conversation } from '../../hooks/useConversations';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '../../contexts/NavigationContext';
-import { useJarvis } from '../../contexts/JarvisContext';
 import {
   IoSearchOutline, IoAdd,
-  IoChevronDownOutline, IoChevronUpOutline, IoSparklesOutline,
+  IoChevronDownOutline, IoChevronUpOutline,
 } from 'react-icons/io5';
 import { fetchWithAuth } from '@mobile/services/apiClient';
 import { API_BASE_URL } from '@mobile/config/api';
@@ -34,13 +33,12 @@ interface SubgroupInfo {
 }
 
 // Number of columns in the groups grid (matches repeat(auto-fill, 80px) at typical sidebar width)
-const GRID_COLS = 3;
+const GRID_COLS = 1;
 
 export default function ConversationsPanel({ filter }: ConversationsPanelProps) {
   const { isLoggedIn } = useAuth();
   const { privateConversations, groupConversations, agentConversations, isLoading } = useConversations();
   const { openConversation, selectedConversation, navigate } = useNavigation();
-  const { liveTurns } = useJarvis();
   const [search, setSearch] = useState('');
   const [groupMeta, setGroupMeta] = useState<GroupMeta[]>([]);
   const [expandedGroupUuids, setExpandedGroupUuids] = useState<Record<string, boolean>>({});
@@ -86,7 +84,7 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
 
   if (!isLoggedIn) {
     return (
-      <div className="conv-panel">
+      <div className={`conv-panel conv-panel--${filter}`}>
         <p className="conv-panel__empty">Connectez-vous pour voir vos conversations.</p>
       </div>
     );
@@ -169,7 +167,6 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
     const isSelected   = selectedConversation?.uuid === conv.uuid;
     const hasUnread    = conv.unread_count > 0;
     const isAgent      = conv.conversation_type === 'agent';
-    const textualAgent = isAgent && !conv.avatar_url;
     const subgroups    = filter === 'groups' ? getSubgroupConvs(conv) : [];
     const convMeta     = conv.group_info?.uuid ? groupMetaByUuid.get(conv.group_info.uuid) : null;
     const hasChildren  = convMeta ? (convMeta.subgroups_count ?? 0) > 0 : subgroups.length > 0;
@@ -183,7 +180,6 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
           hasUnread           ? 'conv-square--unread'        : '',
           isSelected          ? 'conv-square--selected'      : '',
           isAgent             ? 'conv-square--agent'         : '',
-          textualAgent        ? 'conv-square--agent-textual' : '',
           opts?.isSubgroup    ? 'conv-square--subgroup'      : '',
         ].filter(Boolean).join(' ')}
         onClick={() => openConversation(conv)}
@@ -191,10 +187,6 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
       >
         {conv.avatar_url ? (
           <img src={conv.avatar_url} alt={conv.name} className="conv-square__avatar" />
-        ) : textualAgent ? (
-          <div className="conv-square__agent-name-fill">
-            <span className="conv-square__agent-name-fill-text">{conv.name}</span>
-          </div>
         ) : (
           <div className="conv-square__avatar-placeholder">
             {conv.name.charAt(0).toUpperCase()}
@@ -207,70 +199,22 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
           </span>
         )}
 
-        {!textualAgent && (
-          <div
-            className={`conv-square__name-badge${isAgent ? ' conv-square__name-badge--agent' : ''}${hasChildren ? ' conv-square__name-badge--expandable' : ''}`}
-            role={hasChildren ? 'button' : undefined}
-            aria-label={hasChildren ? (isExpanded ? 'Réduire' : 'Voir les sous-groupes') : undefined}
-            onClick={hasChildren ? e => { e.stopPropagation(); void toggleExpand(conv); } : undefined}
-          >
-            <span className={`conv-square__name${isAgent ? ' conv-square__name--agent' : ''}`}>
-              {conv.name}
-            </span>
-            {hasChildren && (
-              <span className="conv-square__chevron">
-                {isExpanded
-                  ? <IoChevronUpOutline size={11} />
-                  : <IoChevronDownOutline size={11} />}
-              </span>
-            )}
-          </div>
-        )}
-      </button>
-    );
-  };
-
-  const renderJarvisHistory = () => {
-    const filteredTurns = search.trim()
-      ? liveTurns.filter(turn =>
-        turn.userMessage.toLowerCase().includes(search.toLowerCase()) ||
-        turn.jarvisResponse.toLowerCase().includes(search.toLowerCase())
-      )
-      : liveTurns;
-
-    return (
-      <div className="conv-panel__jarvis-history">
-        <button
-          className="conv-square conv-square--add"
-          title="Nouvelle demande Jarvis"
-          onClick={() => navigate('home')}
+        <div
+          className={`conv-square__name-badge${hasChildren ? ' conv-square__name-badge--expandable' : ''}`}
+          role={hasChildren ? 'button' : undefined}
+          aria-label={hasChildren ? (isExpanded ? 'Réduire' : 'Voir les sous-groupes') : undefined}
+          onClick={hasChildren ? e => { e.stopPropagation(); void toggleExpand(conv); } : undefined}
         >
-          <IoAdd size={38} color="rgba(10, 145, 104, 1)" />
-          <div className="conv-square__name-badge">
-            <span className="conv-square__name">Nouveau</span>
-          </div>
-        </button>
-
-        {filteredTurns.map(turn => (
-          <div key={turn.id} className="conv-panel__jarvis-card">
-            <div className="conv-panel__jarvis-card-icon">
-              <IoSparklesOutline size={16} />
-            </div>
-            <div className="conv-panel__jarvis-card-body">
-              <span className="conv-panel__jarvis-card-title">{turn.userMessage}</span>
-              <span className="conv-panel__jarvis-card-preview">
-                {turn.isProcessing ? 'Jarvis reflechit...' : turn.jarvisResponse}
-              </span>
-            </div>
-          </div>
-        ))}
-
-        {filteredTurns.length === 0 && (
-          <p className="conv-panel__empty">
-            {search ? 'Aucun resultat' : 'Aucun historique Jarvis dans cette session'}
-          </p>
-        )}
-      </div>
+          <span className="conv-square__name">{conv.name}</span>
+          {hasChildren && (
+            <span className="conv-square__chevron">
+              {isExpanded
+                ? <IoChevronUpOutline size={11} />
+                : <IoChevronDownOutline size={11} />}
+            </span>
+          )}
+        </div>
+      </button>
     );
   };
 
@@ -357,13 +301,14 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
   };
 
   return (
-    <div className="conv-panel">
+    <div className={`conv-panel conv-panel--${filter}`}>
       {/* Search bar */}
       <div className="conv-panel__search-wrap">
         <IoSearchOutline size={16} className="conv-panel__search-icon" />
         <input
           className="conv-panel__search"
-          placeholder="Rechercher..."
+          placeholder=""
+          aria-label="Rechercher une conversation"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -373,19 +318,19 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
       </div>
 
       <div className="conv-panel__grid-scroll">
-        {filter !== 'agents' && isLoading ? (
+        {isLoading ? (
           <div className="conv-panel__loading">
             <div className="conv-panel__spinner" />
             <span>Chargement...</span>
           </div>
         ) : (
           <>
-            {filter === 'agents' ? renderJarvisHistory() : filter === 'groups' ? renderGroupsGrid() : (
+            {filter === 'groups' ? renderGroupsGrid() : (
               <div className={`conv-panel__grid${filter === 'private' ? ' conv-panel__grid--private' : ''}`}>
                 <button
                   className="conv-square conv-square--add"
-                  title="Nouveau"
-                  onClick={() => navigate('add-friend')}
+                  title={filter === 'agents' ? 'Nouvel agent' : 'Nouveau'}
+                  onClick={() => navigate(filter === 'agents' ? 'add-agent' : 'add-friend')}
                 >
                   <IoAdd size={38} color="rgba(10, 145, 104, 1)" />
                   <div className="conv-square__name-badge">
@@ -396,7 +341,7 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
               </div>
             )}
 
-            {filter !== 'agents' && filtered.length === 0 && (
+            {filtered.length === 0 && (
               <p className="conv-panel__empty">{search ? 'Aucun résultat' : emptyText}</p>
             )}
           </>

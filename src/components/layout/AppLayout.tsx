@@ -1,6 +1,6 @@
 import Sidebar, { type PageId } from './Sidebar';
 import WebBottomBar from './WebBottomBar';
-import { SIDEBAR_PANEL_DEFAULT_WIDTH } from '../../styles/theme';
+import { getSidebarPanelWidthForColumns } from '../../styles/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import './AppLayout.css';
@@ -14,9 +14,10 @@ const PAGES_WITH_PANEL: PageId[] = ['conversations', 'groups', 'agents', 'add-fr
 
 export default function AppLayout({ children, panelContent }: AppLayoutProps) {
   const { user, isLoggedIn, logout } = useAuth();
-  const { currentPage, navigate } = useNavigation();
+  const { currentPage, navigate, isSidebarPanelOpen } = useNavigation();
 
-  const isPanelOpen = PAGES_WITH_PANEL.includes(currentPage);
+  const isPanelOpen = PAGES_WITH_PANEL.includes(currentPage) && isSidebarPanelOpen;
+  const panelWidth = getSidebarPanelWidthForColumns(1);
 
   const userPhoto = user?.photo_profil_url || user?.photo_profil || null;
   const userName = user?.username || user?.first_name || undefined;
@@ -28,7 +29,7 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
           activePage={currentPage}
           onNavigate={navigate}
           panelContent={isPanelOpen ? panelContent(currentPage) : null}
-          panelWidth={SIDEBAR_PANEL_DEFAULT_WIDTH}
+          panelWidth={panelWidth}
           isPanelOpen={isPanelOpen}
           isResizing={false}
           userPhoto={userPhoto}
@@ -38,7 +39,7 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
         />
 
         <div className={`app-layout__foreground ${isPanelOpen ? 'app-layout__foreground--panel-open' : ''}`}>
-          <main className={`app-layout__main ${currentPage === 'home' ? 'app-layout__main--home' : ''}`}>
+          <main className={`app-layout__main ${currentPage === 'home' ? 'app-layout__main--home' : ''} ${PAGES_WITH_PANEL.includes(currentPage) ? 'app-layout__main--conversation' : ''}`}>
             {children(currentPage)}
           </main>
 

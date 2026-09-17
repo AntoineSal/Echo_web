@@ -16,6 +16,7 @@ export default defineConfig({
       '/relations': { target: BACKEND_URL, changeOrigin: true, secure: true },
       '/groups': { target: BACKEND_URL, changeOrigin: true, secure: true },
       '/framework': { target: BACKEND_URL, changeOrigin: true, secure: true },
+      '/scripts': { target: BACKEND_URL, changeOrigin: true, secure: true },
       '/ws': { target: BACKEND_URL.replace('https', 'wss'), ws: true, changeOrigin: true, secure: true },
     },
   },
@@ -57,4 +58,3 @@ export default defineConfig({
     'process.env': {},
   },
 })
-
