@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { IoChevronBack, IoSparklesOutline, IoStar, IoStarOutline } from 'react-icons/io5';
+import { IoChevronBack, IoSearchOutline, IoSparklesOutline, IoStar, IoStarOutline } from 'react-icons/io5';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAgentFramework, type Agent } from '../hooks/useAgentFramework';
 import { useConversations } from '../hooks/useConversations';
@@ -73,12 +73,15 @@ export default function AddAgentPage() {
 
     return (
         <div className="add-page">
+            <div className="add-page__top-vignette" aria-hidden="true" />
             <div className="add-page__header">
                 <button className="add-page__back-btn" onClick={() => navigate('agents')}>
                     <IoChevronBack size={22} />
                 </button>
-                <IoSparklesOutline size={18} className="add-page__header-icon" />
-                <span className="add-page__header-title">Agents IA</span>
+                <div className="add-page__title-bubble">
+                    <IoSparklesOutline size={18} className="add-page__header-icon" />
+                    <span className="add-page__header-title">Nouvelle conversation</span>
+                </div>
             </div>
 
             <div className="add-page__content">
@@ -94,6 +97,7 @@ export default function AddAgentPage() {
 
                 {/* Search */}
                 <div className="add-page__search-wrap">
+                    <IoSearchOutline size={17} className="add-page__search-icon" />
                     <input
                         className="add-page__search"
                         placeholder="Rechercher un agent..."

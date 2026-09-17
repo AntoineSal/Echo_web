@@ -723,15 +723,19 @@ export default function ConversationManagementPage({ conversation }: Props) {
             : (userProfile?.surnom || userProfile?.username || conversation.name);
 
     const typeBadgeLabel = isGroup ? 'Groupe' : isAgent ? 'Agent IA' : 'Conversation directe';
+    const managementTitle = isGroup ? 'Infos du groupe' : isAgent ? "Infos de l'agent" : 'Infos du contact';
 
     return (
         <div className="mgmt-page">
+            <div className="mgmt-page__top-vignette" aria-hidden="true" />
             <div className="mgmt-page__header">
                 <button className="mgmt-page__back-btn" onClick={closeConversationManagement}>
                     <IoChevronBack size={22} />
                 </button>
-                <IoSettingsOutline size={18} className="mgmt-page__header-icon" />
-                <span className="mgmt-page__header-title">Gestion</span>
+                <div className="mgmt-page__title-bubble">
+                    <IoSettingsOutline size={18} className="mgmt-page__header-icon" />
+                    <span className="mgmt-page__header-title">{managementTitle}</span>
+                </div>
                 {isAgent && (
                     <button className="mgmt-page__fav-btn" onClick={handleToggleFavorite}>
                         {isFavorite ? <IoStar size={20} color="rgba(10,145,104,1)" /> : <IoStarOutline size={20} color="#9ca3af" />}
@@ -751,7 +755,9 @@ export default function ConversationManagementPage({ conversation }: Props) {
                     <div className="mgmt-page__loading"><div className="mgmt-page__spinner" /></div>
                 ) : (
                     <>
-                        <div className="mgmt-page__hero">
+                        <div className="mgmt-page__desktop-layout">
+                            <aside className="mgmt-page__identity-column">
+                            <div className="mgmt-page__hero">
                             <div className="mgmt-page__hero-bg" />
                             {displayAvatar ? (
                                 <img src={displayAvatar} alt={displayName} className="mgmt-page__avatar" />
@@ -788,7 +794,10 @@ export default function ConversationManagementPage({ conversation }: Props) {
                                     </div>
                                 </div>
                             )}
-                        </div>
+                            </div>
+                            </aside>
+
+                            <main className="mgmt-page__settings-column">
 
                         {(isGroup && groupDetails?.description) && (
                             <section className="mgmt-page__section">
@@ -1335,6 +1344,8 @@ export default function ConversationManagementPage({ conversation }: Props) {
                                 </div>
                             </section>
                         )}
+                            </main>
+                        </div>
                     </>
                 )}
             </div>

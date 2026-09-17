@@ -155,12 +155,15 @@ export default function CreateGroupPage() {
 
     return (
         <div className="add-page">
+            <div className="add-page__top-vignette" aria-hidden="true" />
             <div className="add-page__header">
                 <button className="add-page__back-btn" onClick={() => navigate('groups')}>
                     <IoChevronBack size={22} />
                 </button>
-                <IoPeopleOutline size={18} className="add-page__header-icon" />
-                <span className="add-page__header-title">Gestion de groupe</span>
+                <div className="add-page__title-bubble">
+                    <IoPeopleOutline size={18} className="add-page__header-icon" />
+                    <span className="add-page__header-title">Gestion de groupe</span>
+                </div>
             </div>
 
             <div className="add-page__content add-page__content--cards">
@@ -237,18 +240,20 @@ export default function CreateGroupPage() {
                                                 onClick={() => toggleMember(connection.uuid)}
                                                 title={displayName}
                                             >
-                                                {connection.photo_profil_url ? (
-                                                    <img src={connection.photo_profil_url} alt={displayName} className="add-page__square-avatar" />
-                                                ) : (
-                                                    <div className="add-page__square-placeholder">
-                                                        {displayName.charAt(0).toUpperCase()}
-                                                    </div>
-                                                )}
-                                                {isSelected && (
-                                                    <div className="add-page__check">
-                                                        <IoCheckmarkOutline size={12} />
-                                                    </div>
-                                                )}
+                                                <div className="add-page__square-visual">
+                                                    {connection.photo_profil_url ? (
+                                                        <img src={connection.photo_profil_url} alt={displayName} className="add-page__square-avatar" />
+                                                    ) : (
+                                                        <div className="add-page__square-placeholder">
+                                                            {displayName.charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    {isSelected && (
+                                                        <div className="add-page__check">
+                                                            <IoCheckmarkOutline size={12} />
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <div className="add-page__name-badge">
                                                     <span>{displayName}</span>
                                                 </div>

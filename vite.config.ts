@@ -8,6 +8,8 @@ const BACKEND_URL = 'https://reseausocial-production.up.railway.app';
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Preview tunnels (Codespaces/LocalTunnel) use a public Host header.
+    allowedHosts: true,
     proxy: {
       '/api': { target: BACKEND_URL, changeOrigin: true, secure: true },
       '/messaging': { target: BACKEND_URL, changeOrigin: true, secure: true },

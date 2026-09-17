@@ -74,13 +74,15 @@ export default function AddFriendPage() {
 
     return (
         <div className="add-page">
-            {/* Floating header */}
+            <div className="add-page__top-vignette" aria-hidden="true" />
             <div className="add-page__header">
                 <button className="add-page__back-btn" onClick={() => navigate('conversations')}>
                     <IoChevronBack size={22} />
                 </button>
-                <IoPersonAddOutline size={18} className="add-page__header-icon" />
-                <span className="add-page__header-title">Ajouter des amis</span>
+                <div className="add-page__title-bubble">
+                    <IoPersonAddOutline size={18} className="add-page__header-icon" />
+                    <span className="add-page__header-title">Ajouter des amis</span>
+                </div>
             </div>
 
             <div className="add-page__content">
@@ -120,14 +122,16 @@ export default function AddFriendPage() {
                                                 className={`add-page__square ${isSelected ? 'add-page__square--selected' : ''}`}
                                                 onClick={() => toggle(user.uuid)}
                                             >
-                                                {user.photo_profil_url ? (
-                                                    <img src={user.photo_profil_url} alt="" className="add-page__square-avatar" />
-                                                ) : (
-                                                    <div className="add-page__square-placeholder">
-                                                        {displayName.charAt(0).toUpperCase()}
-                                                    </div>
-                                                )}
-                                                {isSelected && <span className="add-page__check">✓</span>}
+                                                <div className="add-page__square-visual">
+                                                    {user.photo_profil_url ? (
+                                                        <img src={user.photo_profil_url} alt="" className="add-page__square-avatar" />
+                                                    ) : (
+                                                        <div className="add-page__square-placeholder">
+                                                            {displayName.charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    {isSelected && <span className="add-page__check">✓</span>}
+                                                </div>
                                                 <div className="add-page__name-badge">
                                                     <span>{displayName}</span>
                                                 </div>

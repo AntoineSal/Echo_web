@@ -14,9 +14,10 @@ const PAGES_WITH_PANEL: PageId[] = ['conversations', 'groups', 'agents', 'add-fr
 
 export default function AppLayout({ children, panelContent }: AppLayoutProps) {
   const { user, isLoggedIn, logout } = useAuth();
-  const { currentPage, navigate, isSidebarPanelOpen } = useNavigation();
+  const { currentPage, navigate, isSidebarPanelOpen, conversationView } = useNavigation();
 
   const isPanelOpen = PAGES_WITH_PANEL.includes(currentPage) && isSidebarPanelOpen;
+  const isCreationPage = currentPage === 'add-friend' || currentPage === 'add-group' || currentPage === 'add-agent';
   const panelWidth = getSidebarPanelWidthForColumns(1);
 
   const userPhoto = user?.photo_profil_url || user?.photo_profil || null;
@@ -43,7 +44,7 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
             {children(currentPage)}
           </main>
 
-          <WebBottomBar />
+          {conversationView !== 'management' && !isCreationPage && <WebBottomBar />}
         </div>
       </div>
     </div>
