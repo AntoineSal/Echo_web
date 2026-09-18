@@ -45,6 +45,31 @@ const CONV_TYPE_TO_PAGE: Record<string, PageId> = {
     ai_agent: 'agents',
 };
 
+type ConversationPage = 'conversations' | 'groups' | 'agents';
+type ConversationView = 'thread' | 'management';
+
+interface TabMemory {
+    conversation: Conversation | null;
+    view: ConversationView;
+    isPanelOpen: boolean;
+    replyTo: ReplyTarget | null;
+}
+
+const PAGE_TO_CONVERSATION_TAB: Partial<Record<PageId, ConversationPage>> = {
+    conversations: 'conversations',
+    'add-friend': 'conversations',
+    groups: 'groups',
+    'add-group': 'groups',
+    agents: 'agents',
+    'add-agent': 'agents',
+};
+
+const createInitialTabMemories = (): Record<ConversationPage, TabMemory> => ({
+    conversations: { conversation: null, view: 'thread', isPanelOpen: true, replyTo: null },
+    groups: { conversation: null, view: 'thread', isPanelOpen: true, replyTo: null },
+    agents: { conversation: null, view: 'thread', isPanelOpen: true, replyTo: null },
+});
+
 export function NavigationProvider({ children }: { children: React.ReactNode }) {
     const [currentPage, setCurrentPage] = useState<PageId>('home');
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
@@ -52,39 +77,101 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
     const [isSidebarPanelOpen, setIsSidebarPanelOpen] = useState(false);
     const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
     const sendCallbackRef = useRef<ChatSendCallback | null>(null);
+    const currentPageRef = useRef<PageId>('home');
+    const selectedConversationRef = useRef<Conversation | null>(null);
+    const conversationViewRef = useRef<ConversationView>('thread');
+    const sidebarPanelOpenRef = useRef(false);
+    const replyToRef = useRef<ReplyTarget | null>(null);
+    const tabMemoriesRef = useRef(createInitialTabMemories());
 
     const CONV_PAGES = new Set<PageId>(['conversations', 'groups', 'agents', 'add-friend', 'add-group', 'add-agent']);
 
-    const navigate = useCallback((page: PageId) => {
-        setCurrentPage(page);
-        setIsSidebarPanelOpen(CONV_PAGES.has(page));
-        setConversationView('thread');
-        setSelectedConversation(prev => {
-            if (!prev) return prev;
-            const convPage = CONV_TYPE_TO_PAGE[prev.conversation_type] ?? 'conversations';
-            if (!CONV_PAGES.has(page)) { sendCallbackRef.current = null; return null; }
-            // Switching to a different conversation type section — close the open thread
-            if (page !== convPage && !page.startsWith('add-')) {
-                sendCallbackRef.current = null;
-                return null;
-            }
-            return prev;
-        });
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    const openConversation = useCallback((conv: Conversation) => {
-        setSelectedConversation(conv);
-        setConversationView('thread');
-        setCurrentPage(CONV_TYPE_TO_PAGE[conv.conversation_type] ?? 'conversations');
-        setIsSidebarPanelOpen(true);
-        setReplyTo(null);
+    const applyTabMemory = useCallback((memory: TabMemory) => {
+        selectedConversationRef.current = memory.conversation;
+        conversationViewRef.current = memory.view;
+        sidebarPanelOpenRef.current = memory.isPanelOpen;
+        replyToRef.current = memory.replyTo;
+        setSelectedConversation(memory.conversation);
+        setConversationView(memory.view);
+        setIsSidebarPanelOpen(memory.isPanelOpen);
+        setReplyTo(memory.replyTo);
     }, []);
 
+    const saveCurrentTab = useCallback(() => {
+        const currentTab = PAGE_TO_CONVERSATION_TAB[currentPageRef.current];
+        if (!currentTab || currentPageRef.current.startsWith('add-')) return;
+        tabMemoriesRef.current[currentTab] = {
+            conversation: selectedConversationRef.current,
+            view: conversationViewRef.current,
+            isPanelOpen: sidebarPanelOpenRef.current,
+            replyTo: replyToRef.current,
+        };
+    }, []);
+
+    const navigate = useCallback((page: PageId) => {
+        saveCurrentTab();
+        const targetTab = PAGE_TO_CONVERSATION_TAB[page];
+        currentPageRef.current = page;
+        setCurrentPage(page);
+        sendCallbackRef.current = null;
+
+        if (targetTab) {
+            applyTabMemory(tabMemoriesRef.current[targetTab]);
+            return;
+        }
+
+        selectedConversationRef.current = null;
+        conversationViewRef.current = 'thread';
+        sidebarPanelOpenRef.current = false;
+        replyToRef.current = null;
+        setSelectedConversation(null);
+        setConversationView('thread');
+        setIsSidebarPanelOpen(false);
+        setReplyTo(null);
+    }, [applyTabMemory, saveCurrentTab]);
+
+    const openConversation = useCallback((conv: Conversation) => {
+        const targetPage = (CONV_TYPE_TO_PAGE[conv.conversation_type] ?? 'conversations') as ConversationPage;
+        saveCurrentTab();
+        const memory: TabMemory = {
+            conversation: conv,
+            view: 'thread',
+            isPanelOpen: true,
+            replyTo: null,
+        };
+        tabMemoriesRef.current[targetPage] = memory;
+        currentPageRef.current = targetPage;
+        selectedConversationRef.current = conv;
+        conversationViewRef.current = 'thread';
+        sidebarPanelOpenRef.current = true;
+        replyToRef.current = null;
+        setSelectedConversation(conv);
+        setConversationView('thread');
+        setCurrentPage(targetPage);
+        setIsSidebarPanelOpen(true);
+        setReplyTo(null);
+    }, [saveCurrentTab]);
+
     const toggleSidebarPanel = useCallback(() => {
-        setIsSidebarPanelOpen(open => !open);
+        setIsSidebarPanelOpen(open => {
+            const next = !open;
+            sidebarPanelOpenRef.current = next;
+            const tab = PAGE_TO_CONVERSATION_TAB[currentPageRef.current];
+            if (tab) tabMemoriesRef.current[tab].isPanelOpen = next;
+            return next;
+        });
     }, []);
 
     const closeConversation = useCallback(() => {
+        const tab = PAGE_TO_CONVERSATION_TAB[currentPageRef.current];
+        selectedConversationRef.current = null;
+        conversationViewRef.current = 'thread';
+        replyToRef.current = null;
+        if (tab) {
+            tabMemoriesRef.current[tab].conversation = null;
+            tabMemoriesRef.current[tab].view = 'thread';
+            tabMemoriesRef.current[tab].replyTo = null;
+        }
         setSelectedConversation(null);
         setConversationView('thread');
         sendCallbackRef.current = null;
@@ -92,15 +179,28 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
     }, []);
 
     const openConversationManagement = useCallback(() => {
+        conversationViewRef.current = 'management';
+        const tab = PAGE_TO_CONVERSATION_TAB[currentPageRef.current];
+        if (tab) tabMemoriesRef.current[tab].view = 'management';
         setConversationView('management');
     }, []);
 
     const closeConversationManagement = useCallback(() => {
+        conversationViewRef.current = 'thread';
+        const tab = PAGE_TO_CONVERSATION_TAB[currentPageRef.current];
+        if (tab) tabMemoriesRef.current[tab].view = 'thread';
         setConversationView('thread');
     }, []);
 
     const registerSendCallback = useCallback((cb: ChatSendCallback | null) => {
         sendCallbackRef.current = cb;
+    }, []);
+
+    const updateReplyTo = useCallback((target: ReplyTarget | null) => {
+        replyToRef.current = target;
+        const tab = PAGE_TO_CONVERSATION_TAB[currentPageRef.current];
+        if (tab) tabMemoriesRef.current[tab].replyTo = target;
+        setReplyTo(target);
     }, []);
 
     return (
@@ -118,7 +218,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
             registerSendCallback,
             sendCallback: sendCallbackRef,
             replyTo,
-            setReplyTo,
+            setReplyTo: updateReplyTo,
         }}>
             {children}
         </NavigationContext.Provider>

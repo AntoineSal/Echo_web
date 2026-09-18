@@ -17,7 +17,7 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
   const { currentPage, navigate, isSidebarPanelOpen, conversationView } = useNavigation();
 
   const isPanelOpen = PAGES_WITH_PANEL.includes(currentPage) && isSidebarPanelOpen;
-  const isCreationPage = currentPage === 'add-friend' || currentPage === 'add-group' || currentPage === 'add-agent';
+  const isImmersivePage = currentPage === 'add-friend' || currentPage === 'add-group' || currentPage === 'add-agent' || currentPage === 'marketplace';
   const panelWidth = getSidebarPanelWidthForColumns(1);
 
   const userPhoto = user?.photo_profil_url || user?.photo_profil || null;
@@ -40,11 +40,11 @@ export default function AppLayout({ children, panelContent }: AppLayoutProps) {
         />
 
         <div className={`app-layout__foreground ${isPanelOpen ? 'app-layout__foreground--panel-open' : ''}`}>
-          <main className={`app-layout__main ${currentPage === 'home' ? 'app-layout__main--home' : ''} ${PAGES_WITH_PANEL.includes(currentPage) ? 'app-layout__main--conversation' : ''}`}>
+          <main className={`app-layout__main ${currentPage === 'home' ? 'app-layout__main--home' : ''} ${currentPage === 'marketplace' ? 'app-layout__main--marketplace' : ''} ${PAGES_WITH_PANEL.includes(currentPage) ? 'app-layout__main--conversation' : ''}`}>
             {children(currentPage)}
           </main>
 
-          {conversationView !== 'management' && !isCreationPage && <WebBottomBar />}
+          {conversationView !== 'management' && !isImmersivePage && <WebBottomBar />}
         </div>
       </div>
     </div>

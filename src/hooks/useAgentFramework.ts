@@ -19,6 +19,17 @@ export interface Agent {
     };
 }
 
+function normalizeAgents(data: any): Agent[] {
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.results)) return data.results;
+    const combined = [...(data?.created_agents || []), ...(data?.favorite_agents || [])] as Agent[];
+    const unique = new Map<string, Agent>();
+    combined.forEach((agent) => {
+        if (agent.uuid) unique.set(agent.uuid, { ...unique.get(agent.uuid), ...agent });
+    });
+    return [...unique.values()];
+}
+
 export function useAgentFramework() {
     const { isLoggedIn } = useAuth();
     const queryClient = useQueryClient();
@@ -29,8 +40,7 @@ export function useAgentFramework() {
             const res = await fetchWithAuth(`${API_BASE_URL}/framework/agents/`);
             if (!res.ok) return [];
             const data = await res.json();
-            const results = Array.isArray(data) ? data : data.results || [];
-            return results;
+            return normalizeAgents(data);
         },
         enabled: isLoggedIn,
         staleTime: 5 * 60_000,
@@ -42,7 +52,7 @@ export function useAgentFramework() {
             const res = await fetchWithAuth(`${API_BASE_URL}/framework/agents/public/`);
             if (!res.ok) return [];
             const data = await res.json();
-            return Array.isArray(data) ? data : data.results || [];
+            return normalizeAgents(data);
         },
         enabled: isLoggedIn,
         staleTime: 5 * 60_000,

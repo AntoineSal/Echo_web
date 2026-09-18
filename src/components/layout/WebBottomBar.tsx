@@ -117,7 +117,7 @@ function ToolPicker({
                         className={`wbb-tool-menu__item ${selectedTool?.id === tool.id ? 'wbb-tool-menu__item--selected' : ''}`}
                         onClick={() => onSelect(tool)}
                     >
-                        <span className="wbb-tool-menu__icon">{tool.icon}</span>
+                        <span className="wbb-tool-menu__icon"><IoHardwareChip size={18} /></span>
                         <span className="wbb-tool-menu__text">
                             <span className="wbb-tool-menu__name">{tool.name}</span>
                             <span className="wbb-tool-menu__desc">{tool.description}</span>
@@ -172,13 +172,21 @@ export default function WebBottomBar() {
     const canSend = effectiveText.trim().length > 0 || stagedFiles.length > 0 || !!stagedVoice;
 
     const { data: tools = [] } = useQuery({
-        queryKey: ['jarvis', 'tools', 'bottom-bar'],
+        queryKey: ['agents', 'favorites', 'bottom-bar'],
         queryFn: async (): Promise<ToolItem[]> => {
-            const res = await fetchWithAuth(`${API_BASE_URL}/framework/agents/public/`);
+            const res = await fetchWithAuth(`${API_BASE_URL}/framework/agents/`);
             if (!res.ok) return [];
             const data = await res.json();
-            const agents: BackendAgent[] = Array.isArray(data) ? data : data.results || [];
-            return agents.map(enrichAgent);
+            const rawAgents: BackendAgent[] = Array.isArray(data)
+                ? data
+                : Array.isArray(data.results)
+                    ? data.results
+                    : [...(data.created_agents || []), ...(data.favorite_agents || [])];
+            const unique = new Map<string, BackendAgent>();
+            rawAgents.forEach((agent) => {
+                if (agent.uuid) unique.set(agent.uuid, { ...unique.get(agent.uuid), ...agent });
+            });
+            return [...unique.values()].filter((agent) => agent.is_favorite).map(enrichAgent);
         },
         enabled: isChat && (jarvisMode || toolPickerOpen),
         staleTime: 5 * 60_000,
