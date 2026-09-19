@@ -1,12 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-    IoArrowForward, IoCalendarOutline, IoClose, IoDocumentTextOutline,
+    IoAdd, IoArrowForward, IoCalendarOutline, IoClose, IoDocumentTextOutline,
     IoImageOutline, IoMailOutline, IoMusicalNotesOutline, IoPartlySunnyOutline,
     IoPlanetOutline, IoSearchOutline, IoWalkOutline,
 } from 'react-icons/io5';
 import { useAuth } from '../contexts/AuthContext';
 import { useJarvis } from '../contexts/JarvisContext';
 import { AgentContentRenderer } from '../components/conversations/AgentContentRenderer';
+import { archiveConversation, sendTemporaryJarvisAgentMessage } from '@mobile/services/jarvisAgentConversation';
+import { useNavigation } from '../contexts/NavigationContext';
+import { useConversations } from '../hooks/useConversations';
+import { CONVERSATION_PINS_EVENT, getPinnedConversationUuids } from '../services/conversationPins';
 import jarvisLogo from '@mobile/assets/images/logo-watermark.png';
 import './HomePage.css';
 
@@ -43,7 +47,11 @@ const stableIndex = (value: string, length: number) =>
 export default function HomePage() {
     const { user } = useAuth();
     const { liveTurns, clearLiveTurns, setComposerText, focusComposer } = useJarvis();
+    const { openConversation } = useNavigation();
+    const { privateConversations, groupConversations, agentConversations, refreshAll } = useConversations();
     const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
+    const [isOpeningConversation, setIsOpeningConversation] = useState(false);
+    const [pinRevision, setPinRevision] = useState(0);
     const identity = user?.uuid || user?.username || 'echo';
     const firstName = (user?.first_name || user?.username || '').trim().split(/\s+/)[0];
     const welcomeMessage = WELCOME_MESSAGES[stableIndex(identity, WELCOME_MESSAGES.length)]
@@ -55,11 +63,50 @@ export default function HomePage() {
     const activeSuggestion = SUGGESTIONS.find(item => item.id === activeSuggestionId) ?? null;
     const latestTurn = liveTurns.at(-1) ?? null;
     const previousTurns = liveTurns.slice(0, -1);
+    const pinnedConversations = useMemo(() => {
+        const pinnedIds = getPinnedConversationUuids(user?.uuid);
+        const conversations = [...privateConversations, ...groupConversations, ...agentConversations];
+        const byUuid = new Map(conversations.map(conversation => [conversation.uuid, conversation]));
+        return pinnedIds.map(uuid => byUuid.get(uuid)).filter((conversation): conversation is NonNullable<typeof conversation> => !!conversation);
+    }, [agentConversations, groupConversations, pinRevision, privateConversations, user?.uuid]);
+
+    useEffect(() => {
+        const updatePins = () => setPinRevision(value => value + 1);
+        window.addEventListener(CONVERSATION_PINS_EVENT, updatePins);
+        window.addEventListener('storage', updatePins);
+        return () => {
+            window.removeEventListener(CONVERSATION_PINS_EVENT, updatePins);
+            window.removeEventListener('storage', updatePins);
+        };
+    }, []);
 
     const chooseCompletion = (text: string) => {
         setComposerText(text);
         setActiveSuggestionId(null);
         focusComposer();
+    };
+
+    const openAsConversation = async () => {
+        if (!latestTurn || isOpeningConversation) return;
+        setIsOpeningConversation(true);
+        try {
+            let conversationUuid = latestTurn.conversationUuid;
+            if (!conversationUuid && latestTurn.userMessage.trim()) {
+                const result = await sendTemporaryJarvisAgentMessage(latestTurn.userMessage, null);
+                conversationUuid = result.conversationUuid;
+            }
+            if (!conversationUuid) return;
+            await archiveConversation(conversationUuid, false);
+            await refreshAll();
+            const existing = agentConversations.find(conversation => conversation.uuid === conversationUuid);
+            openConversation(existing || {
+                uuid: conversationUuid, unread_count: 0, conversation_type: 'agent',
+                name: 'Jarvis', avatar_url: '', framework_agent: { name: 'Jarvis', avatar_url: '' },
+            });
+            clearLiveTurns();
+        } finally {
+            setIsOpeningConversation(false);
+        }
     };
 
     return (
@@ -69,10 +116,19 @@ export default function HomePage() {
                 <p className="home-page__welcome-text">{welcomeMessage}</p>
             </div>}
 
+            {!latestTurn && pinnedConversations.length > 0 && <div className="home-page__pinned-grid" aria-label="Conversations épinglées">
+                {pinnedConversations.map(conversation => <button key={conversation.uuid} type="button" className="home-page__pinned-conversation" onClick={() => openConversation(conversation)} aria-label={`Ouvrir ${conversation.name}`} title={conversation.name}>
+                    {conversation.avatar_url ? <img src={conversation.avatar_url} alt="" /> : <span>{conversation.name.charAt(0).toUpperCase()}</span>}
+                </button>)}
+            </div>}
+
             {latestTurn && <article className="home-page__jarvis-panel">
                 <header className="home-page__jarvis-header">
                     <span className="home-page__jarvis-title">Jarvis</span>
-                    <button type="button" className="home-page__jarvis-close" onClick={clearLiveTurns} aria-label="Fermer la conversation Jarvis"><IoClose size={20} /></button>
+                    <div className="home-page__jarvis-actions">
+                        <button type="button" className="home-page__jarvis-close" onClick={() => void openAsConversation()} disabled={isOpeningConversation || latestTurn.isProcessing} aria-label="Ouvrir dans une conversation avec Jarvis">{isOpeningConversation ? <span className="home-page__action-spinner" /> : <IoAdd size={22} />}</button>
+                        <button type="button" className="home-page__jarvis-close" onClick={clearLiveTurns} aria-label="Fermer la conversation Jarvis"><IoClose size={20} /></button>
+                    </div>
                 </header>
                 {previousTurns.map(turn => <div className="home-page__turn home-page__turn--previous" key={turn.id}>
                     <div className="home-page__user-row"><div className="home-page__user-bubble">{turn.userMessage}</div></div>

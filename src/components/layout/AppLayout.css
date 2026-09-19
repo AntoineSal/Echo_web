@@ -59,6 +59,11 @@
     overflow: hidden;
 }
 
+.app-layout__main--profile {
+    padding: 0;
+    overflow: hidden;
+}
+
 .app-layout__main--conversation {
     padding: 0;
 }

@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { fetchWithAuth } from '@mobile/services/apiClient';
-import { API_BASE_URL } from '@mobile/config/api';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { sendTemporaryJarvisAgentMessage } from '@mobile/services/jarvisAgentConversation';
 import { useAuth } from './AuthContext';
 import {
     sendJarvisInteraction as sendJarvisInteractionRequest,
@@ -14,6 +13,7 @@ export interface JarvisLiveTurn {
     userMessage: string;
     jarvisResponse: string;
     isProcessing: boolean;
+    conversationUuid?: string;
 }
 
 interface JarvisContextType {
@@ -38,6 +38,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     const [composerText, setComposerText] = useState('');
     const [composerFocusKey, setComposerFocusKey] = useState(0);
     const [localMessagesByConversation, setLocalMessagesByConversation] = useState<Record<string, Message[]>>({});
+    const temporaryConversationUuidRef = useRef<string | null>(null);
 
     const upsertLiveTurn = useCallback((turn: JarvisLiveTurn) => {
         setLiveTurns(prev => {
@@ -51,6 +52,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
     const clearLiveTurns = useCallback(() => {
         setLiveTurns([]);
+        temporaryConversationUuidRef.current = null;
     }, []);
 
     const removeLiveTurn = useCallback((id: string) => {
@@ -76,40 +78,13 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
         upsertLiveTurn(newTurn);
 
         try {
-            const response = await fetchWithAuth(`${API_BASE_URL}/jarvis/chat/?type=message`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: message.trim() }),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                upsertLiveTurn({
-                    ...newTurn,
-                    jarvisResponse: data.response || 'Aucune réponse',
-                    isProcessing: false,
-                });
-            } else {
-                let errorMsg = `Erreur ${response.status}`;
-                try {
-                    const errorData = await response.json();
-                    if (errorData.detail) errorMsg += `: ${errorData.detail}`;
-                    else if (errorData.error) errorMsg = errorData.error;
-                    console.error('Jarvis API Error details:', errorData);
-                } catch {
-                    errorMsg = `Erreur ${response.status}`;
-                }
-
-                upsertLiveTurn({
-                    ...newTurn,
-                    jarvisResponse: errorMsg,
-                    isProcessing: false,
-                });
-            }
-        } catch {
+            const result = await sendTemporaryJarvisAgentMessage(message.trim(), temporaryConversationUuidRef.current);
+            temporaryConversationUuidRef.current = result.conversationUuid;
+            upsertLiveTurn({ ...newTurn, conversationUuid: result.conversationUuid, jarvisResponse: result.response || 'Aucune réponse', isProcessing: false });
+        } catch (error) {
             upsertLiveTurn({
                 ...newTurn,
-                jarvisResponse: 'Erreur réseau',
+                jarvisResponse: error instanceof Error ? error.message : 'Erreur réseau',
                 isProcessing: false,
             });
         }

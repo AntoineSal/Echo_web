@@ -31,6 +31,7 @@
 
 .mgmt-page__back-btn,
 .mgmt-page__fav-btn,
+.mgmt-page__pin-btn,
 .mgmt-page__icon-btn {
     border: none;
     cursor: pointer;
@@ -40,7 +41,8 @@
 }
 
 .mgmt-page__back-btn,
-.mgmt-page__fav-btn {
+.mgmt-page__fav-btn,
+.mgmt-page__pin-btn {
     width: 36px;
     height: 36px;
     border-radius: 18px;
@@ -926,6 +928,7 @@
 
 .mgmt-page__back-btn,
 .mgmt-page__fav-btn,
+.mgmt-page__pin-btn,
 .mgmt-page__title-bubble {
     height: 44px;
     background: rgba(255, 255, 255, 0.88);
@@ -936,14 +939,16 @@
 }
 
 .mgmt-page__back-btn,
-.mgmt-page__fav-btn {
+.mgmt-page__fav-btn,
+.mgmt-page__pin-btn {
     width: 44px;
     border-radius: 50%;
     flex: 0 0 44px;
 }
 
 .mgmt-page__back-btn:hover,
-.mgmt-page__fav-btn:hover {
+.mgmt-page__fav-btn:hover,
+.mgmt-page__pin-btn:hover {
     background: #fff;
 }
 
@@ -982,12 +987,15 @@
 }
 
 .mgmt-page__desktop-layout {
-    width: min(760px, calc(100% - 48px));
+    width: min(1180px, 80%);
     margin: 0 auto;
     display: flex;
     flex-direction: column;
     gap: 14px;
 }
+
+.mgmt-page__pin-btn { color: #68736e; }
+.mgmt-page__pin-btn--active { color: #0a9168; background: rgba(255,255,255,.96); }
 
 .mgmt-page__identity-column {
     position: static;

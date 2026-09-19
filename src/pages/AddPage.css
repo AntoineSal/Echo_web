@@ -539,7 +539,7 @@
 
 .add-page__content,
 .add-page__content--cards {
-    width: min(760px, calc(100% - 48px));
+    width: min(1180px, 80%);
     box-sizing: border-box;
     margin: 0 auto;
     padding: 96px 0 52px;

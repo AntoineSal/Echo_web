@@ -1,5 +1,11 @@
 .home-page { position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; background: rgba(242, 242, 242, 0.94); }
 .home-page__welcome { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 44px; pointer-events: none; }
+.home-page__pinned-grid { position: absolute; inset: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, 88px); grid-auto-rows: 88px; align-content: start; justify-content: start; gap: 14px; padding: 24px 24px 126px; scrollbar-width: none; }
+.home-page__pinned-grid::-webkit-scrollbar { display: none; }
+.home-page__pinned-conversation { width: 88px; height: 88px; padding: 0; overflow: hidden; border-radius: 23px; border: 1px solid rgba(255,255,255,.56); background: rgba(255,255,255,.58); box-shadow: 0 2px 7px rgba(0,0,0,.045); color: #5e6d66; font-size: 24px; font-weight: 700; }
+.home-page__pinned-conversation img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.home-page__welcome { z-index: 2; }
+.home-page__suggestions { z-index: 3; }
 .home-page__welcome-logo { width: 56px; height: 56px; object-fit: contain; opacity: 0.92; filter: brightness(0) saturate(100%) invert(41%) sepia(76%) saturate(868%) hue-rotate(116deg) brightness(83%) contrast(95%); }
 .home-page__welcome-text { max-width: 300px; margin-top: 5px; color: #666; font-size: 14px; line-height: 20px; font-weight: 500; font-style: italic; text-align: center; }
 .home-page__suggestions { position: absolute; left: 20%; right: 20%; bottom: 88px; z-index: 12; display: flex; justify-content: center; gap: 10px; overflow-x: auto; padding: 6px 0; scrollbar-width: none; }
@@ -12,11 +18,15 @@
 .home-page__completions-list { width: min(60vw, 100%); margin: 0 auto; padding: 0 20px 88px; border-top: 1px solid rgba(255,255,255,.52); }
 .home-page__completion { width: 100%; min-height: 51px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 2px; border-bottom: 1px solid rgba(255,255,255,.52); color: #333; font-size: 15px; line-height: 20px; font-weight: 500; text-align: left; }
 .home-page__completion svg { flex: 0 0 auto; color: rgba(55,65,81,.48); }
-.home-page--with-jarvis { overflow-y: auto; padding: 32px max(24px, calc((100% - 760px) / 2)) 112px; }
+.home-page--with-jarvis { overflow-y: auto; padding: 32px 10% 112px; }
 .home-page__jarvis-panel { width: 100%; padding: 18px; border: 1px solid rgba(255,255,255,.52); border-radius: 24px; background: rgba(255,255,255,.58); box-shadow: 0 2px 6px rgba(0,0,0,.04); overflow: hidden; }
 .home-page__jarvis-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .home-page__jarvis-title { color: #333; font-size: 16px; font-weight: 600; }
+.home-page__jarvis-actions { display: flex; align-items: center; gap: 6px; }
 .home-page__jarvis-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 16px; background: rgba(0,0,0,.05); color: #55685a; }
+.home-page__jarvis-close:disabled { opacity: .42; cursor: default; }
+.home-page__action-spinner { width: 14px; height: 14px; border: 2px solid rgba(85,104,90,.25); border-top-color: #55685a; border-radius: 50%; animation: home-action-spin .7s linear infinite; }
+@keyframes home-action-spin { to { transform: rotate(360deg); } }
 .home-page__turn--previous { margin-top: 4px; padding-top: 10px; border-top: 1px solid rgba(10,145,104,.08); }
 .home-page__turn--current { margin-top: 12px; }
 .home-page__user-row { display: flex; justify-content: flex-end; align-items: flex-end; }
@@ -27,4 +37,4 @@
 .home-page__jarvis-response--processing { display: flex; align-items: center; gap: 8px; color: #55685a; font-size: 14px; font-style: italic; }
 .home-page__processing-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(10,145,104,.8); animation: home-processing-pulse 1.1s ease-in-out infinite; }
 @keyframes home-processing-pulse { 50% { opacity: .3; transform: scale(.8); } }
-@media (max-width: 900px) { .home-page__suggestions { left: 20px; right: 20px; justify-content: flex-start; } .home-page__completions-list { width: 100%; } }
+@media (max-width: 900px) { .home-page__suggestions { left: 20px; right: 20px; justify-content: flex-start; } .home-page__completions-list { width: 100%; } .home-page--with-jarvis { padding-left: 20px; padding-right: 20px; } }

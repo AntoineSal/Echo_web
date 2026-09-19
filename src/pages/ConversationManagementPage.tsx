@@ -18,6 +18,8 @@ import {
     IoImageOutline,
     IoInformationCircleOutline,
     IoLinkOutline,
+    IoPin,
+    IoPinOutline,
     IoPeopleOutline,
     IoPersonAddOutline,
     IoPersonOutline,
@@ -35,6 +37,7 @@ import { useNavigation } from '../contexts/NavigationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { webDatabaseManager } from '../services/webDatabase';
 import type { Conversation } from '../hooks/useConversations';
+import { isConversationPinned, setConversationPinned } from '../services/conversationPins';
 import './ConversationManagementPage.css';
 
 interface Props {
@@ -257,6 +260,7 @@ export default function ConversationManagementPage({ conversation }: Props) {
     const [showAllMembers, setShowAllMembers] = useState(false);
     const [promptExpanded, setPromptExpanded] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
+    const [isPinned, setIsPinned] = useState(() => isConversationPinned(user?.uuid, conversation.uuid));
     const [actionMsg, setActionMsg] = useState<string | null>(null);
     const [memberSearch, setMemberSearch] = useState('');
     const [inviteMessage, setInviteMessage] = useState('');
@@ -480,6 +484,18 @@ export default function ConversationManagementPage({ conversation }: Props) {
             cancelled = true;
         };
     }, [conversation.uuid, groupUuid, isAgent, isDirect, isGroup]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        setIsPinned(isConversationPinned(user?.uuid, conversation.uuid));
+    }, [conversation.uuid, user?.uuid]);
+
+    const handleTogglePinned = () => {
+        if (!user?.uuid) return;
+        const next = !isPinned;
+        setConversationPinned(user.uuid, conversation, next);
+        setIsPinned(next);
+        notify(next ? "Conversation épinglée à l'accueil" : "Conversation retirée de l'accueil");
+    };
 
     const handleArchive = async () => {
         if (!window.confirm('Archiver cette conversation ?')) return;
@@ -736,6 +752,9 @@ export default function ConversationManagementPage({ conversation }: Props) {
                     <IoSettingsOutline size={18} className="mgmt-page__header-icon" />
                     <span className="mgmt-page__header-title">{managementTitle}</span>
                 </div>
+                <button className={`mgmt-page__pin-btn ${isPinned ? 'mgmt-page__pin-btn--active' : ''}`} onClick={handleTogglePinned} aria-label={isPinned ? "Désépingler de l'accueil" : "Épingler à l'accueil"} title={isPinned ? 'Désépingler' : 'Épingler'}>
+                    {isPinned ? <IoPin size={19} /> : <IoPinOutline size={19} />}
+                </button>
                 {isAgent && (
                     <button className="mgmt-page__fav-btn" onClick={handleToggleFavorite}>
                         {isFavorite ? <IoStar size={20} color="rgba(10,145,104,1)" /> : <IoStarOutline size={20} color="#9ca3af" />}

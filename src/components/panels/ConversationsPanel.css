@@ -10,8 +10,9 @@
 .conv-panel__search-wrap {
   position: absolute;
   top: 12px;
-  left: 10px;
-  right: 10px;
+  left: 50%;
+  width: 80px;
+  transform: translateX(-50%);
   z-index: 20;
   margin: 0;
   display: flex;
@@ -21,12 +22,19 @@
   border-radius: 20px;
   box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
   padding: 0 12px;
+  cursor: pointer;
+  transition: width var(--transition-smooth), border-radius var(--transition-smooth), background var(--transition-smooth);
+}
+
+.conv-panel--search-open .conv-panel__search-wrap {
+  width: 170px;
+  cursor: text;
 }
 
 .conv-panel__search-icon {
   color: #999;
   flex-shrink: 0;
-  margin-right: 8px;
+  margin-right: 0;
 }
 
 .conv-panel__search {
@@ -38,6 +46,18 @@
   outline: none;
   font-family: inherit;
   height: 100%;
+  min-width: 0;
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease, width var(--transition-smooth), margin-left var(--transition-smooth);
+}
+
+.conv-panel--search-open .conv-panel__search {
+  width: auto;
+  opacity: 1;
+  margin-left: 8px;
+  pointer-events: auto;
 }
 
 .conv-panel__search::placeholder {
@@ -102,11 +122,15 @@
   padding-bottom: 24px;
 }
 
-.conv-panel--private .conv-panel__search-wrap {
-  left: 0;
-  right: 0;
-  padding: 0 10px;
+.conv-panel--two-columns .conv-panel__grid--private,
+.conv-panel--two-columns.conv-panel--agents .conv-panel__grid,
+.conv-panel--two-columns .conv-panel__grid--groups-row {
+  grid-template-columns: repeat(2, 80px);
+  justify-content: center;
+  column-gap: 10px;
 }
+
+.conv-panel--private .conv-panel__search-wrap { padding: 0 10px; }
 
 .conv-panel--private .conv-panel__search-icon {
   margin-right: 5px;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useConversations, type Conversation } from '../../hooks/useConversations';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '../../contexts/NavigationContext';
@@ -12,6 +12,7 @@ import './ConversationsPanel.css';
 
 interface ConversationsPanelProps {
   filter: 'private' | 'groups' | 'agents';
+  onSearchExpansionChange?: (expanded: boolean) => void;
 }
 
 interface GroupMeta {
@@ -33,17 +34,53 @@ interface SubgroupInfo {
 }
 
 // Number of columns in the groups grid (matches repeat(auto-fill, 80px) at typical sidebar width)
-const GRID_COLS = 1;
-
-export default function ConversationsPanel({ filter }: ConversationsPanelProps) {
+export default function ConversationsPanel({ filter, onSearchExpansionChange }: ConversationsPanelProps) {
   const { isLoggedIn } = useAuth();
   const { privateConversations, groupConversations, agentConversations, isLoading } = useConversations();
   const { openConversation, selectedConversation, navigate } = useNavigation();
   const [search, setSearch] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [showTwoColumns, setShowTwoColumns] = useState(false);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const columnsCloseTimerRef = useRef<number | null>(null);
   const [groupMeta, setGroupMeta] = useState<GroupMeta[]>([]);
   const [expandedGroupUuids, setExpandedGroupUuids] = useState<Record<string, boolean>>({});
   const [fetchedSubgroups, setFetchedSubgroups] = useState<Record<string, SubgroupInfo[]>>({});
   const [loadingExpand, setLoadingExpand] = useState<Record<string, boolean>>({});
+
+  const setSearchOpen = (open: boolean) => {
+    if (columnsCloseTimerRef.current !== null) window.clearTimeout(columnsCloseTimerRef.current);
+    setIsSearchOpen(open);
+    onSearchExpansionChange?.(open);
+    if (open) {
+      setShowTwoColumns(true);
+    } else {
+      setSearch('');
+      columnsCloseTimerRef.current = window.setTimeout(() => {
+        setShowTwoColumns(false);
+        columnsCloseTimerRef.current = null;
+      }, 350);
+    }
+  };
+
+  useEffect(() => {
+    if (!isSearchOpen) return;
+    const focusTimer = window.setTimeout(() => searchInputRef.current?.focus(), 180);
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!searchWrapRef.current?.contains(event.target as Node)) setSearchOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+    };
+  }, [isSearchOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => {
+    if (columnsCloseTimerRef.current !== null) window.clearTimeout(columnsCloseTimerRef.current);
+    onSearchExpansionChange?.(false);
+  }, [onSearchExpansionChange]);
 
   // ── Fetch group hierarchy metadata when in groups mode ──
   useEffect(() => {
@@ -182,7 +219,7 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
           isAgent             ? 'conv-square--agent'         : '',
           opts?.isSubgroup    ? 'conv-square--subgroup'      : '',
         ].filter(Boolean).join(' ')}
-        onClick={() => openConversation(conv)}
+        onClick={() => { setSearchOpen(false); openConversation(conv); }}
         title={conv.name}
       >
         {conv.avatar_url ? (
@@ -243,8 +280,9 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
     // Build rows of GRID_COLS, with "add" button occupying the first slot
     const slots: Array<Conversation | '__add__'> = ['__add__', ...rootConvs];
     const rows: Array<Array<Conversation | '__add__'>> = [];
-    for (let i = 0; i < slots.length; i += GRID_COLS) {
-      rows.push(slots.slice(i, i + GRID_COLS));
+    const gridColumns = showTwoColumns ? 2 : 1;
+    for (let i = 0; i < slots.length; i += gridColumns) {
+      rows.push(slots.slice(i, i + gridColumns));
     }
 
     return (
@@ -301,16 +339,18 @@ export default function ConversationsPanel({ filter }: ConversationsPanelProps) 
   };
 
   return (
-    <div className={`conv-panel conv-panel--${filter}`}>
+    <div className={`conv-panel conv-panel--${filter} ${isSearchOpen ? 'conv-panel--search-open' : ''} ${showTwoColumns ? 'conv-panel--two-columns' : ''}`}>
       {/* Search bar */}
-      <div className="conv-panel__search-wrap">
+      <div ref={searchWrapRef} className="conv-panel__search-wrap" role={!isSearchOpen ? 'button' : undefined} tabIndex={!isSearchOpen ? 0 : undefined} onClick={() => { if (!isSearchOpen) setSearchOpen(true); }} onKeyDown={event => { if (!isSearchOpen && (event.key === 'Enter' || event.key === ' ')) setSearchOpen(true); }}>
         <IoSearchOutline size={16} className="conv-panel__search-icon" />
         <input
+          ref={searchInputRef}
           className="conv-panel__search"
           placeholder=""
           aria-label="Rechercher une conversation"
           value={search}
           onChange={e => setSearch(e.target.value)}
+          disabled={!isSearchOpen}
         />
         {search && (
           <button className="conv-panel__search-clear" onClick={() => setSearch('')}>✕</button>
